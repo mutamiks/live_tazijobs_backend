@@ -1,0 +1,101 @@
+<?php
+
+use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CatalogController;
+use App\Http\Controllers\Api\JobApplicationController;
+use App\Http\Controllers\Api\JobController;
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\SubscriptionController;
+use App\Http\Controllers\Api\WorkerController;
+use Illuminate\Support\Facades\Route;
+
+Route::post('register', [AuthController::class, 'register']);
+Route::post('login', [AuthController::class, 'login']);
+Route::get('subscription-packages', [SubscriptionController::class, 'packages']);
+Route::get('catalogs', [CatalogController::class, 'index']);
+Route::get('locations/uganda', [CatalogController::class, 'locations']);
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('logout', [AuthController::class, 'logout']);
+    Route::get('user', [AuthController::class, 'me']);
+    Route::get('profile-file/{field}', [ProfileController::class, 'file']);
+
+    Route::middleware('permission:view_notifications')->group(function () {
+        Route::get('notifications', [NotificationController::class, 'index']);
+        Route::patch('notifications/{notification}/read', [NotificationController::class, 'markRead']);
+    });
+
+    Route::middleware('role:job_seeker')->group(function () {
+        Route::post('job-seeker/profile', [ProfileController::class, 'submitJobSeeker'])->middleware('permission:manage_job_seeker_profile');
+        Route::middleware('permission:manage_own_subscription')->group(function () {
+            Route::get('subscriptions/current', [SubscriptionController::class, 'current']);
+            Route::post('subscriptions', [SubscriptionController::class, 'subscribe']);
+            Route::post('subscriptions/upgrade', [SubscriptionController::class, 'upgrade']);
+        });
+        Route::middleware('permission:browse_jobs')->group(function () {
+            Route::get('jobs', [JobController::class, 'index']);
+            Route::get('jobs/matching', [JobController::class, 'matching']);
+            Route::get('jobs/{job}', [JobController::class, 'show']);
+        });
+        Route::post('jobs/{job}/apply', [JobApplicationController::class, 'apply'])->middleware('permission:apply_for_jobs');
+        Route::get('my-applications', [JobApplicationController::class, 'myApplications'])->middleware('permission:view_own_applications');
+    });
+
+    Route::middleware('role:employer')->group(function () {
+        Route::post('employer/profile', [ProfileController::class, 'submitEmployer'])->middleware('permission:manage_employer_profile');
+        Route::middleware('permission:manage_employer_jobs')->group(function () {
+            Route::post('employer/jobs', [JobController::class, 'store']);
+            Route::get('employer/jobs', [JobController::class, 'employerJobs']);
+        });
+        Route::get('employer/applications', [JobApplicationController::class, 'employerApplications'])->middleware('permission:view_employer_applications');
+        Route::patch('employer/applications/{application}/status', [JobApplicationController::class, 'updateStatus'])->middleware('permission:update_employer_application_status');
+        Route::middleware('employer.approved')->group(function () {
+            Route::middleware('permission:browse_workers')->group(function () {
+                Route::get('workers', [WorkerController::class, 'index']);
+                Route::get('workers/{worker}', [WorkerController::class, 'show']);
+            });
+            Route::middleware('permission:manage_worker_orders')->group(function () {
+                Route::post('worker-orders', [WorkerController::class, 'storeOrder']);
+                Route::get('worker-orders', [WorkerController::class, 'orders']);
+            });
+        });
+    });
+
+    Route::middleware(['role:admin', 'permission:access_admin'])->prefix('admin')->group(function () {
+        Route::get('stats', [AdminController::class, 'stats']);
+        Route::get('users', [AdminController::class, 'users']);
+        Route::patch('users/{user}/suspend', [AdminController::class, 'suspendUser']);
+        Route::get('catalogs', [CatalogController::class, 'adminIndex']);
+        Route::post('catalogs/job-categories', [CatalogController::class, 'storeJobCategory']);
+        Route::post('catalogs/languages', [CatalogController::class, 'storeLanguage']);
+        Route::post('catalogs/religions', [CatalogController::class, 'storeReligion']);
+        Route::post('catalogs/locations', [CatalogController::class, 'storeLocation']);
+
+        Route::get('job-seeker-profiles/pending', [AdminController::class, 'pendingJobSeekers']);
+        Route::get('job-seeker-profiles/{profile}', [AdminController::class, 'showJobSeeker']);
+        Route::patch('job-seeker-profiles/{profile}/decision', [AdminController::class, 'decideJobSeeker']);
+
+        Route::get('employer-profiles/pending', [AdminController::class, 'pendingEmployers']);
+        Route::get('employer-profiles/{profile}', [AdminController::class, 'showEmployer']);
+        Route::patch('employer-profiles/{profile}/decision', [AdminController::class, 'decideEmployer']);
+
+        Route::get('jobs/pending', [AdminController::class, 'pendingJobs']);
+        Route::post('jobs', [JobController::class, 'adminStore']);
+        Route::get('jobs', [AdminController::class, 'jobs']);
+        Route::get('jobs/{job}', [AdminController::class, 'showJob']);
+        Route::patch('jobs/{job}/decision', [AdminController::class, 'decideJob']);
+        Route::get('files/{type}/{id}/{field}', [AdminController::class, 'file']);
+
+        Route::get('applications/pending', [AdminController::class, 'pendingApplications']);
+        Route::patch('applications/{application}/decision', [AdminController::class, 'decideApplication']);
+
+        Route::get('worker-orders/pending', [AdminController::class, 'pendingWorkerOrders']);
+        Route::patch('worker-orders/{order}/decision', [AdminController::class, 'decideWorkerOrder']);
+
+        Route::get('subscription-packages', [AdminController::class, 'subscriptionPackages']);
+        Route::post('subscription-packages', [AdminController::class, 'storeSubscriptionPackage']);
+        Route::patch('subscription-packages/{package}', [AdminController::class, 'updateSubscriptionPackage']);
+    });
+});
