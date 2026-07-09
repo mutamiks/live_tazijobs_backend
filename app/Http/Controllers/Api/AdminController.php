@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\ApprovalDecisionRequest;
 use App\Http\Requests\StoreSubscriptionPackageRequest;
 use App\Models\EmployerProfile;
+use App\Models\AdminRole;
 use App\Models\Job;
 use App\Models\JobApplication;
 use App\Models\JobSeekerProfile;
@@ -16,6 +17,7 @@ use App\Support\NotifiesUsers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use App\Services\SmsService;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Support\Str;
 
 class AdminController extends Controller
@@ -47,7 +49,7 @@ class AdminController extends Controller
     public function users(Request $request)
     {
         $users = User::query()
-            ->with(['jobSeekerProfile', 'employerProfile'])
+            ->with(['jobSeekerProfile', 'employerProfile', 'adminRole'])
             ->when($request->query('search'), function ($query, string $search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('name', 'like', "%{$search}%")
@@ -61,6 +63,160 @@ class AdminController extends Controller
             ->paginate(20);
 
         return response()->json(['data' => $users]);
+    }
+
+    public function roles()
+    {
+        return response()->json([
+            'data' => [
+                'roles' => AdminRole::query()->withCount('users')->latest()->get(),
+                'permissions' => $this->availableStaffPermissions(),
+                'system_roles' => collect(config('permissions.roles'))->map(fn (array $permissions, string $role) => [
+                    'role' => $role,
+                    'label' => Str::headline(str_replace('_', ' ', $role)),
+                    'description' => match ($role) {
+                        'admin' => 'Built-in full administrator account type. Full admins without a custom staff role keep all permissions.',
+                        'job_seeker' => 'Built-in account type created when someone signs up to look for jobs.',
+                        'employer' => 'Built-in account type created when someone signs up to post jobs or hire workers.',
+                        default => 'Built-in system account type.',
+                    },
+                    'permissions' => $permissions,
+                ])->values(),
+            ],
+        ]);
+    }
+
+    public function storeRole(Request $request)
+    {
+        $allowed = array_keys($this->availableStaffPermissions());
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:120', 'unique:admin_roles,name'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'permissions' => ['required', 'array', 'min:1'],
+            'permissions.*' => ['required', 'string', 'in:'.implode(',', $allowed)],
+        ]);
+
+        $permissions = array_values(array_unique($data['permissions']));
+        if (! in_array('access_admin', $permissions, true)) {
+            $permissions[] = 'access_admin';
+        }
+
+        $role = AdminRole::query()->create([
+            'name' => $data['name'],
+            'slug' => Str::slug($data['name']).'-'.str()->lower(str()->random(5)),
+            'description' => $data['description'] ?? null,
+            'permissions' => $permissions,
+        ]);
+
+        return response()->json(['message' => 'Role created.', 'data' => $role], 201);
+    }
+
+    public function updateRole(Request $request, AdminRole $role)
+    {
+        $allowed = array_keys($this->availableStaffPermissions());
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:120', 'unique:admin_roles,name,'.$role->id],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'permissions' => ['required', 'array', 'min:1'],
+            'permissions.*' => ['required', 'string', 'in:'.implode(',', $allowed)],
+        ]);
+
+        $permissions = array_values(array_unique($data['permissions']));
+        if (! in_array('access_admin', $permissions, true)) {
+            $permissions[] = 'access_admin';
+        }
+
+        $role->update([
+            'name' => $data['name'],
+            'description' => $data['description'] ?? null,
+            'permissions' => $permissions,
+        ]);
+
+        return response()->json(['message' => 'Role updated.', 'data' => $role->fresh()->loadCount('users')]);
+    }
+
+    public function storeUser(Request $request)
+    {
+        if (filled($request->input('phone'))) {
+            $request->merge(['phone' => '+'.app(SmsService::class)->normalizePhone($request->input('phone'))]);
+        }
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'phone' => ['nullable', 'regex:/^(?:\+256|256|0)?7\d{8}$/', 'unique:users,phone'],
+            'role' => ['required', 'in:admin,job_seeker,employer'],
+            'admin_role_id' => ['nullable', 'required_if:role,admin', 'exists:admin_roles,id'],
+            'password' => ['required', 'confirmed', Password::min(8)],
+        ]);
+
+        if (filled($data['phone'] ?? null)) {
+            $data['phone_verified_at'] = now();
+        }
+
+        if (($data['role'] ?? null) !== 'admin') {
+            $data['admin_role_id'] = null;
+        }
+
+        $user = User::query()->create($data + ['status' => 'approved']);
+
+        $this->notifyUser(
+            $user,
+            'account_created_by_admin',
+            'Account created',
+            'Your TaziJobs account has been created by an administrator.'
+        );
+
+        return response()->json(['message' => 'User account created.', 'data' => $user->load('adminRole')], 201);
+    }
+
+    private function availableStaffPermissions(): array
+    {
+        return [
+            'access_admin' => 'Access admin dashboard',
+
+            'view_dashboard' => 'View dashboard',
+
+            'approve_employers' => 'Approve employers',
+            'approve_job_seekers' => 'Approve job seekers',
+            'approve_jobs' => 'Approve jobs',
+            'approve_applications' => 'Approve job applications',
+            'approve_worker_orders' => 'Approve worker orders',
+
+            'upload_jobs' => 'Upload jobs',
+            'search_jobs' => 'Search jobs',
+            'view_pending_jobs' => 'View pending jobs',
+
+            'manage_sms' => 'Manage SMS',
+            'top_up_sms' => 'Top up SMS',
+            'check_sms_balance' => 'Check SMS balance',
+            'see_sms_payments' => 'See SMS payments',
+            'see_sms_topups' => 'See SMS top-ups',
+            'process_sms_payments' => 'Refresh/distribute SMS payments',
+
+            'manage_catalogs' => 'Manage catalogs',
+            'view_catalogs' => 'View catalogs',
+            'create_catalogs' => 'Create catalog entries',
+
+            'manage_subscription_packages' => 'Manage subscription packages',
+            'view_subscription_packages_admin' => 'View subscription packages',
+            'create_subscription_packages' => 'Create subscription packages',
+            'edit_subscription_packages' => 'Edit subscription packages',
+
+            'manage_users' => 'Manage users',
+            'view_users' => 'View users',
+            'create_users' => 'Create staff users',
+            'suspend_users' => 'Suspend users',
+
+            'manage_roles' => 'Manage roles and permissions',
+            'view_roles' => 'View roles and permissions',
+            'create_roles' => 'Create roles',
+            'edit_roles' => 'Edit roles',
+
+            'view_notifications' => 'View notifications',
+        ];
     }
 
     public function suspendUser(User $user)

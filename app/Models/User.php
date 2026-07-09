@@ -7,6 +7,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -27,6 +28,7 @@ class User extends Authenticatable
         'phone',
         'phone_verified_at',
         'role',
+        'admin_role_id',
         'status',
         'password',
     ];
@@ -85,6 +87,11 @@ class User extends Authenticatable
         return $this->hasMany(Notification::class);
     }
 
+    public function adminRole(): BelongsTo
+    {
+        return $this->belongsTo(AdminRole::class);
+    }
+
     public function workerOrders(): HasMany
     {
         return $this->hasMany(WorkerOrder::class, 'employer_id');
@@ -104,6 +111,10 @@ class User extends Authenticatable
 
     public function getPermissionsAttribute(): array
     {
+        if ($this->role === 'admin' && $this->adminRole) {
+            return $this->adminRole->permissions ?? [];
+        }
+
         return config("permissions.roles.{$this->role}", []);
     }
 

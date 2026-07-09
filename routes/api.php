@@ -76,47 +76,58 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::middleware(['role:admin', 'permission:access_admin'])->prefix('admin')->group(function () {
-        Route::get('stats', [AdminController::class, 'stats']);
-        Route::get('users', [AdminController::class, 'users']);
-        Route::patch('users/{user}/suspend', [AdminController::class, 'suspendUser']);
+        Route::get('stats', [AdminController::class, 'stats'])->middleware('permission:view_dashboard');
+        Route::get('users', [AdminController::class, 'users'])->middleware('permission:manage_users,view_users');
+        Route::post('users', [AdminController::class, 'storeUser'])->middleware('permission:manage_users,create_users');
+        Route::patch('users/{user}/suspend', [AdminController::class, 'suspendUser'])->middleware('permission:manage_users,suspend_users');
+
+        Route::get('roles', [AdminController::class, 'roles'])->middleware('permission:manage_roles,view_roles,create_roles,edit_roles,create_users');
+        Route::post('roles', [AdminController::class, 'storeRole'])->middleware('permission:manage_roles,create_roles');
+        Route::patch('roles/{role}', [AdminController::class, 'updateRole'])->middleware('permission:manage_roles,edit_roles');
+
         Route::prefix('sms')->group(function () {
-            Route::get('rate', [SmsManagementController::class, 'rate']);
-            Route::get('balance', [SmsManagementController::class, 'balance']);
-            Route::post('payments', [SmsManagementController::class, 'storePayment']);
-            Route::get('payments', [SmsManagementController::class, 'payments']);
-            Route::patch('payments/{payment}/refresh', [SmsManagementController::class, 'refreshPayment']);
-            Route::post('payments/{payment}/distribute', [SmsManagementController::class, 'distribute']);
-            Route::get('topups', [SmsManagementController::class, 'topups']);
+            Route::get('rate', [SmsManagementController::class, 'rate'])->middleware('permission:manage_sms,check_sms_balance,top_up_sms');
+            Route::get('balance', [SmsManagementController::class, 'balance'])->middleware('permission:manage_sms,check_sms_balance');
+            Route::post('payments', [SmsManagementController::class, 'storePayment'])->middleware('permission:manage_sms,top_up_sms');
+            Route::get('payments', [SmsManagementController::class, 'payments'])->middleware('permission:manage_sms,see_sms_payments');
+            Route::patch('payments/{payment}/refresh', [SmsManagementController::class, 'refreshPayment'])->middleware('permission:manage_sms,process_sms_payments');
+            Route::post('payments/{payment}/distribute', [SmsManagementController::class, 'distribute'])->middleware('permission:manage_sms,process_sms_payments');
+            Route::get('topups', [SmsManagementController::class, 'topups'])->middleware('permission:manage_sms,see_sms_topups');
         });
-        Route::get('catalogs', [CatalogController::class, 'adminIndex']);
-        Route::post('catalogs/job-categories', [CatalogController::class, 'storeJobCategory']);
-        Route::post('catalogs/languages', [CatalogController::class, 'storeLanguage']);
-        Route::post('catalogs/religions', [CatalogController::class, 'storeReligion']);
-        Route::post('catalogs/locations', [CatalogController::class, 'storeLocation']);
 
-        Route::get('job-seeker-profiles/pending', [AdminController::class, 'pendingJobSeekers']);
-        Route::get('job-seeker-profiles/{profile}', [AdminController::class, 'showJobSeeker']);
-        Route::patch('job-seeker-profiles/{profile}/decision', [AdminController::class, 'decideJobSeeker']);
+        Route::get('catalogs', [CatalogController::class, 'adminIndex'])->middleware('permission:manage_catalogs,view_catalogs');
+        Route::post('catalogs/job-categories', [CatalogController::class, 'storeJobCategory'])->middleware('permission:manage_catalogs,create_catalogs');
+        Route::post('catalogs/languages', [CatalogController::class, 'storeLanguage'])->middleware('permission:manage_catalogs,create_catalogs');
+        Route::post('catalogs/religions', [CatalogController::class, 'storeReligion'])->middleware('permission:manage_catalogs,create_catalogs');
+        Route::post('catalogs/locations', [CatalogController::class, 'storeLocation'])->middleware('permission:manage_catalogs,create_catalogs');
 
-        Route::get('employer-profiles/pending', [AdminController::class, 'pendingEmployers']);
-        Route::get('employer-profiles/{profile}', [AdminController::class, 'showEmployer']);
-        Route::patch('employer-profiles/{profile}/decision', [AdminController::class, 'decideEmployer']);
+        Route::middleware('permission:approve_job_seekers')->group(function () {
+            Route::get('job-seeker-profiles/pending', [AdminController::class, 'pendingJobSeekers']);
+            Route::get('job-seeker-profiles/{profile}', [AdminController::class, 'showJobSeeker']);
+            Route::patch('job-seeker-profiles/{profile}/decision', [AdminController::class, 'decideJobSeeker']);
+        });
 
-        Route::get('jobs/pending', [AdminController::class, 'pendingJobs']);
-        Route::post('jobs', [JobController::class, 'adminStore']);
-        Route::get('jobs', [AdminController::class, 'jobs']);
-        Route::get('jobs/{job}', [AdminController::class, 'showJob']);
-        Route::patch('jobs/{job}/decision', [AdminController::class, 'decideJob']);
-        Route::get('files/{type}/{id}/{field}', [AdminController::class, 'file']);
+        Route::middleware('permission:approve_employers')->group(function () {
+            Route::get('employer-profiles/pending', [AdminController::class, 'pendingEmployers']);
+            Route::get('employer-profiles/{profile}', [AdminController::class, 'showEmployer']);
+            Route::patch('employer-profiles/{profile}/decision', [AdminController::class, 'decideEmployer']);
+        });
 
-        Route::get('applications/pending', [AdminController::class, 'pendingApplications']);
-        Route::patch('applications/{application}/decision', [AdminController::class, 'decideApplication']);
+        Route::get('jobs/pending', [AdminController::class, 'pendingJobs'])->middleware('permission:approve_jobs,view_pending_jobs');
+        Route::post('jobs', [JobController::class, 'adminStore'])->middleware('permission:upload_jobs');
+        Route::get('jobs', [AdminController::class, 'jobs'])->middleware('permission:search_jobs,approve_jobs');
+        Route::get('jobs/{job}', [AdminController::class, 'showJob'])->middleware('permission:search_jobs,approve_jobs');
+        Route::patch('jobs/{job}/decision', [AdminController::class, 'decideJob'])->middleware('permission:approve_jobs');
+        Route::get('files/{type}/{id}/{field}', [AdminController::class, 'file'])->middleware('permission:approve_job_seekers,approve_employers');
 
-        Route::get('worker-orders/pending', [AdminController::class, 'pendingWorkerOrders']);
-        Route::patch('worker-orders/{order}/decision', [AdminController::class, 'decideWorkerOrder']);
+        Route::get('applications/pending', [AdminController::class, 'pendingApplications'])->middleware('permission:approve_applications');
+        Route::patch('applications/{application}/decision', [AdminController::class, 'decideApplication'])->middleware('permission:approve_applications');
 
-        Route::get('subscription-packages', [AdminController::class, 'subscriptionPackages']);
-        Route::post('subscription-packages', [AdminController::class, 'storeSubscriptionPackage']);
-        Route::patch('subscription-packages/{package}', [AdminController::class, 'updateSubscriptionPackage']);
+        Route::get('worker-orders/pending', [AdminController::class, 'pendingWorkerOrders'])->middleware('permission:approve_worker_orders');
+        Route::patch('worker-orders/{order}/decision', [AdminController::class, 'decideWorkerOrder'])->middleware('permission:approve_worker_orders');
+
+        Route::get('subscription-packages', [AdminController::class, 'subscriptionPackages'])->middleware('permission:manage_subscription_packages,view_subscription_packages_admin');
+        Route::post('subscription-packages', [AdminController::class, 'storeSubscriptionPackage'])->middleware('permission:manage_subscription_packages,create_subscription_packages');
+        Route::patch('subscription-packages/{package}', [AdminController::class, 'updateSubscriptionPackage'])->middleware('permission:manage_subscription_packages,edit_subscription_packages');
     });
 });
