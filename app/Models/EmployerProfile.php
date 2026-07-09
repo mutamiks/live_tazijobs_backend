@@ -10,6 +10,7 @@ class EmployerProfile extends Model
 {
     protected $fillable = [
         'user_id',
+        'employer_type',
         'company_name',
         'company_email',
         'company_phone',

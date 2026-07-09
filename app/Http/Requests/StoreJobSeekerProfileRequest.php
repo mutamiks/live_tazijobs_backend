@@ -11,15 +11,16 @@ class StoreJobSeekerProfileRequest extends FormRequest
     {
         return [
             'full_name' => ['required', 'string', 'max:255'],
-            'gender' => ['nullable', 'string', 'max:50'],
-            'date_of_birth' => ['nullable', 'date', 'before:today'],
+            'job_title' => ['nullable', 'string', 'max:150'],
+            'gender' => ['nullable', Rule::in(['male', 'female'])],
+            'date_of_birth' => ['nullable', 'date', 'before_or_equal:'.now()->subYears(15)->toDateString()],
             'location' => ['nullable', 'string', 'max:255'],
             'district' => ['required', 'string', 'max:255'],
             'county' => ['required', 'string', 'max:255'],
             'subcounty' => ['required', 'string', 'max:255'],
             'parish' => ['required', 'string', 'max:255'],
             'village' => ['required', 'string', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:50'],
+            'phone' => ['nullable', 'regex:/^(?:\+256|256|0)?7\d{8}$/'],
             'languages' => ['required', 'array', 'min:1'],
             'languages.*' => ['string', 'max:100', Rule::exists('languages', 'name')->where('is_active', true)],
             'religion' => ['required', 'string', 'max:100', Rule::exists('religions', 'name')->where('is_active', true)],
@@ -36,7 +37,7 @@ class StoreJobSeekerProfileRequest extends FormRequest
             'id_document_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
             'id_document_front_file' => ['required', 'image', 'max:4096'],
             'id_document_back_file' => ['required', 'image', 'max:4096'],
-            'profile_photo' => ['nullable', 'image', 'max:2048'],
+            'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'terms_accepted' => ['accepted'],
             'is_available' => ['nullable', 'boolean'],
         ];

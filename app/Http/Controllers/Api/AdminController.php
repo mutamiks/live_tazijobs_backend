@@ -15,6 +15,8 @@ use App\Models\WorkerOrder;
 use App\Support\NotifiesUsers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Services\SmsService;
+use Illuminate\Support\Str;
 
 class AdminController extends Controller
 {
@@ -84,8 +86,12 @@ class AdminController extends Controller
                 ->when($request->query('search'), function ($query, string $search) {
                     $query->where(function ($query) use ($search) {
                         $query->where('full_name', 'like', "%{$search}%")
+                            ->orWhere('job_title', 'like', "%{$search}%")
                             ->orWhere('location', 'like', "%{$search}%")
-                            ->orWhereHas('user', fn ($query) => $query->where('email', 'like', "%{$search}%"));
+                            ->orWhere('district', 'like', "%{$search}%")
+                            ->orWhere('phone', 'like', "%{$search}%")
+                            ->orWhere('preferred_job_categories', 'like', "%{$search}%")
+                            ->orWhereHas('user', fn ($query) => $query->where('email', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%"));
                     });
                 })
                 ->latest()
@@ -331,6 +337,17 @@ class AdminController extends Controller
             "{$label} {$data['status']}",
             $approved ? "Your {$label} has been approved." : "Your {$label} was rejected: {$model->rejection_reason}"
         );
+
+        if (($model instanceof JobSeekerProfile || $model instanceof EmployerProfile) && filled($owner->phone)) {
+            $sms = $approved
+                ? "TaziJobs: Your {$label} has been approved."
+                : "TaziJobs: Your {$label} was rejected. Reason: {$model->rejection_reason}";
+            try {
+                app(SmsService::class)->send($owner->phone, Str::limit($sms, 159, ''));
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
 
         return response()->json(['message' => "{$label} {$data['status']}.", 'data' => $model->fresh()]);
     }

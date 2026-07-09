@@ -7,12 +7,22 @@ use App\Http\Controllers\Api\JobApplicationController;
 use App\Http\Controllers\Api\JobController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\PublicDiscoveryController;
 use App\Http\Controllers\Api\SubscriptionController;
+use App\Http\Controllers\Api\SmsManagementController;
 use App\Http\Controllers\Api\WorkerController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
+Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('reset-password', [AuthController::class, 'resetPassword']);
+Route::post('forgot-password-sms', [AuthController::class, 'forgotPasswordSms'])->middleware('throttle:5,1');
+Route::post('reset-password-sms', [AuthController::class, 'resetPasswordSms'])->middleware('throttle:5,1');
+Route::get('public/discovery', [PublicDiscoveryController::class, 'index'])->middleware('throttle:60,1');
+Route::get('public/job-seekers/{profile}/thumbnail', [PublicDiscoveryController::class, 'thumbnail'])
+    ->name('public.job-seeker-thumbnail')
+    ->middleware('throttle:120,1');
 Route::get('subscription-packages', [SubscriptionController::class, 'packages']);
 Route::get('catalogs', [CatalogController::class, 'index']);
 Route::get('locations/uganda', [CatalogController::class, 'locations']);
@@ -20,6 +30,8 @@ Route::get('locations/uganda', [CatalogController::class, 'locations']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('logout', [AuthController::class, 'logout']);
     Route::get('user', [AuthController::class, 'me']);
+    Route::post('phone-verification/send', [AuthController::class, 'sendPhoneVerification'])->middleware('throttle:3,1');
+    Route::post('phone-verification/verify', [AuthController::class, 'verifyPhone'])->middleware('throttle:5,1');
     Route::get('profile-file/{field}', [ProfileController::class, 'file']);
 
     Route::middleware('permission:view_notifications')->group(function () {
@@ -27,7 +39,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('notifications/{notification}/read', [NotificationController::class, 'markRead']);
     });
 
-    Route::middleware('role:job_seeker')->group(function () {
+    Route::middleware(['role:job_seeker', 'phone.verified'])->group(function () {
         Route::post('job-seeker/profile', [ProfileController::class, 'submitJobSeeker'])->middleware('permission:manage_job_seeker_profile');
         Route::middleware('permission:manage_own_subscription')->group(function () {
             Route::get('subscriptions/current', [SubscriptionController::class, 'current']);
@@ -43,7 +55,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('my-applications', [JobApplicationController::class, 'myApplications'])->middleware('permission:view_own_applications');
     });
 
-    Route::middleware('role:employer')->group(function () {
+    Route::middleware(['role:employer', 'phone.verified'])->group(function () {
         Route::post('employer/profile', [ProfileController::class, 'submitEmployer'])->middleware('permission:manage_employer_profile');
         Route::middleware('permission:manage_employer_jobs')->group(function () {
             Route::post('employer/jobs', [JobController::class, 'store']);
@@ -67,6 +79,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('stats', [AdminController::class, 'stats']);
         Route::get('users', [AdminController::class, 'users']);
         Route::patch('users/{user}/suspend', [AdminController::class, 'suspendUser']);
+        Route::prefix('sms')->group(function () {
+            Route::get('rate', [SmsManagementController::class, 'rate']);
+            Route::get('balance', [SmsManagementController::class, 'balance']);
+            Route::post('payments', [SmsManagementController::class, 'storePayment']);
+            Route::get('payments', [SmsManagementController::class, 'payments']);
+            Route::patch('payments/{payment}/refresh', [SmsManagementController::class, 'refreshPayment']);
+            Route::post('payments/{payment}/distribute', [SmsManagementController::class, 'distribute']);
+            Route::get('topups', [SmsManagementController::class, 'topups']);
+        });
         Route::get('catalogs', [CatalogController::class, 'adminIndex']);
         Route::post('catalogs/job-categories', [CatalogController::class, 'storeJobCategory']);
         Route::post('catalogs/languages', [CatalogController::class, 'storeLanguage']);

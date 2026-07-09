@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \App\Http\Middleware\EnsureRole::class,
             'permission' => \App\Http\Middleware\EnsurePermission::class,
             'employer.approved' => \App\Http\Middleware\EnsureEmployerApproved::class,
+            'phone.verified' => \App\Http\Middleware\EnsurePhoneVerified::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

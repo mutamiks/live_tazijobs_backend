@@ -5,12 +5,16 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Facades\Storage;
 
 class JobSeekerProfile extends Model
 {
+    protected $appends = ['profile_photo_thumbnail_url'];
+
     protected $fillable = [
         'user_id',
         'full_name',
+        'job_title',
         'gender',
         'date_of_birth',
         'location',
@@ -34,6 +38,7 @@ class JobSeekerProfile extends Model
         'id_document_front_file',
         'id_document_back_file',
         'profile_photo',
+        'profile_photo_thumbnail',
         'terms_accepted',
         'is_available',
         'status',
@@ -69,5 +74,12 @@ class JobSeekerProfile extends Model
     public function approvalHistories(): MorphMany
     {
         return $this->morphMany(ApprovalHistory::class, 'approvable')->latest();
+    }
+
+    public function getProfilePhotoThumbnailUrlAttribute(): ?string
+    {
+        return $this->profile_photo_thumbnail
+            ? Storage::disk('public')->url($this->profile_photo_thumbnail)
+            : null;
     }
 }

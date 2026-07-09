@@ -7,6 +7,7 @@ use App\Http\Requests\StoreEmployerProfileRequest;
 use App\Http\Requests\StoreJobSeekerProfileRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class ProfileController extends Controller
 {
@@ -18,7 +19,9 @@ class ProfileController extends Controller
         $data['id_document_file'] = $request->file('id_document_file')?->store('id-documents', 'public') ?? ($data['id_document_file'] ?? null);
         $data['id_document_front_file'] = $request->file('id_document_front_file')?->store('id-documents', 'public') ?? ($data['id_document_front_file'] ?? null);
         $data['id_document_back_file'] = $request->file('id_document_back_file')?->store('id-documents', 'public') ?? ($data['id_document_back_file'] ?? null);
-        $data['profile_photo'] = $request->file('profile_photo')?->store('profile-photos', 'public') ?? ($data['profile_photo'] ?? null);
+        if ($photo = $request->file('profile_photo')) {
+            [$data['profile_photo'], $data['profile_photo_thumbnail']] = $this->storePassportPhoto($photo);
+        }
 
         $profile = $request->user()->jobSeekerProfile()->updateOrCreate(
             ['user_id' => $request->user()->id],
@@ -67,7 +70,7 @@ class ProfileController extends Controller
 
         $allowedFields = $user->role === 'employer'
             ? ['company_logo', 'business_document_file']
-            : ['profile_photo', 'cv_file', 'lc1_letter_file', 'id_document_file', 'id_document_front_file', 'id_document_back_file'];
+            : ['profile_photo', 'profile_photo_thumbnail', 'cv_file', 'lc1_letter_file', 'id_document_file', 'id_document_front_file', 'id_document_back_file'];
 
         abort_unless($profile && in_array($field, $allowedFields, true), 404);
 
@@ -78,5 +81,42 @@ class ProfileController extends Controller
         $response->headers->set('Cache-Control', 'private, max-age=3600');
 
         return $response;
+    }
+
+    private function storePassportPhoto($file): array
+    {
+        if (! function_exists('imagecreatefromstring')) {
+            throw ValidationException::withMessages(['profile_photo' => 'Photo processing is not available on the server.']);
+        }
+
+        $source = @imagecreatefromstring(file_get_contents($file->getRealPath()));
+        if (! $source) {
+            throw ValidationException::withMessages(['profile_photo' => 'The passport photo could not be processed.']);
+        }
+
+        $store = function (int $width, int $height, string $folder) use ($source): string {
+            $sourceWidth = imagesx($source);
+            $sourceHeight = imagesy($source);
+            $targetRatio = $width / $height;
+            $sourceRatio = $sourceWidth / $sourceHeight;
+            $cropWidth = $sourceRatio > $targetRatio ? (int) ($sourceHeight * $targetRatio) : $sourceWidth;
+            $cropHeight = $sourceRatio > $targetRatio ? $sourceHeight : (int) ($sourceWidth / $targetRatio);
+            $cropX = (int) (($sourceWidth - $cropWidth) / 2);
+            $cropY = (int) (($sourceHeight - $cropHeight) / 2);
+            $canvas = imagecreatetruecolor($width, $height);
+            imagecopyresampled($canvas, $source, 0, 0, $cropX, $cropY, $width, $height, $cropWidth, $cropHeight);
+            ob_start();
+            imagejpeg($canvas, null, 82);
+            $contents = ob_get_clean();
+            imagedestroy($canvas);
+            $path = $folder.'/'.str()->uuid().'.jpg';
+            Storage::disk('public')->put($path, $contents);
+            return $path;
+        };
+
+        $paths = [$store(300, 400, 'profile-photos'), $store(96, 128, 'profile-photo-thumbnails')];
+        imagedestroy($source);
+
+        return $paths;
     }
 }
