@@ -33,7 +33,7 @@ class JobSeekerAccountFlowTest extends TestCase
         ]);
 
         $this->postJson('/api/login', [
-            'login' => '+256701000111',
+            'login' => '0701000111',
             'password' => 'password',
         ])
             ->assertOk()
@@ -41,7 +41,7 @@ class JobSeekerAccountFlowTest extends TestCase
             ->assertJsonStructure(['data' => ['token']]);
     }
 
-    public function test_employer_still_requires_email_on_registration(): void
+    public function test_employer_registration_still_requires_terms(): void
     {
         $this->postJson('/api/register', [
             'name' => 'Bright Works',
@@ -54,6 +54,20 @@ class JobSeekerAccountFlowTest extends TestCase
             ->assertJsonValidationErrors(['terms_accepted']);
 
         $this->assertDatabaseCount('users', 0);
+    }
+
+    public function test_employer_can_register_without_email(): void
+    {
+        $this->postJson('/api/register', [
+            'name' => 'Bright Works',
+            'phone' => '+256702000112',
+            'password' => 'password',
+            'role' => 'employer',
+            'terms_accepted' => true,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.user.email', null)
+            ->assertJsonPath('data.user.role', 'employer');
     }
 
     public function test_employer_can_register_after_accepting_terms(): void

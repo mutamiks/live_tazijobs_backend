@@ -27,7 +27,7 @@ class RegisterRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required_if:role,employer', 'nullable', 'email', 'max:255', 'unique:users,email'],
+            'email' => ['nullable', 'email', 'max:255', 'unique:users,email'],
             'phone' => ['required', 'regex:/^(?:\+256|256|0)?7\d{8}$/', 'unique:users,phone'],
             'password' => ['required', 'string', 'min:8'],
             'role' => ['required', Rule::in(['job_seeker', 'employer'])],

@@ -10,19 +10,31 @@ use App\Models\AdminRole;
 use App\Models\Job;
 use App\Models\JobApplication;
 use App\Models\JobSeekerProfile;
+use App\Models\JobSeekerSubscription;
 use App\Models\SubscriptionPackage;
+use App\Models\SubscriptionPayment;
 use App\Models\User;
 use App\Models\WorkerOrder;
 use App\Support\NotifiesUsers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use App\Services\SmsService;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
 
 class AdminController extends Controller
 {
     use NotifiesUsers;
+
+    private const EDUCATION_LEVELS = [
+        'Primary Level',
+        'Secondary O Level',
+        'Secondary A Level',
+        'Tertiary Level',
+        'University Level',
+    ];
 
     public function stats()
     {
@@ -49,7 +61,7 @@ class AdminController extends Controller
     public function users(Request $request)
     {
         $users = User::query()
-            ->with(['jobSeekerProfile', 'employerProfile', 'adminRole'])
+            ->with(['jobSeekerProfile', 'employerProfile', 'adminRole', 'activeJobSeekerSubscription.package'])
             ->when($request->query('search'), function ($query, string $search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('name', 'like', "%{$search}%")
@@ -146,9 +158,9 @@ class AdminController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'phone' => ['nullable', 'regex:/^(?:\+256|256|0)?7\d{8}$/', 'unique:users,phone'],
+            'phone' => ['required', 'regex:/^(?:\+256|256|0)?7\d{8}$/', 'unique:users,phone'],
             'role' => ['required', 'in:admin,job_seeker,employer'],
-            'admin_role_id' => ['nullable', 'required_if:role,admin', 'exists:admin_roles,id'],
+            'admin_role_id' => ['nullable', 'exists:admin_roles,id'],
             'password' => ['required', 'confirmed', Password::min(8)],
         ]);
 
@@ -170,6 +182,154 @@ class AdminController extends Controller
         );
 
         return response()->json(['message' => 'User account created.', 'data' => $user->load('adminRole')], 201);
+    }
+
+    public function updateUser(Request $request, User $user)
+    {
+        if (filled($request->input('phone'))) {
+            $request->merge(['phone' => '+'.app(SmsService::class)->normalizePhone($request->input('phone'))]);
+        }
+        if ($request->has('email') && blank($request->input('email'))) {
+            $request->merge(['email' => null]);
+        }
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'phone' => ['required', 'regex:/^(?:\+256|256|0)?7\d{8}$/', Rule::unique('users', 'phone')->ignore($user->id)],
+            'role' => ['required', 'in:admin,job_seeker,employer'],
+            'status' => ['required', 'in:pending,approved,rejected,suspended'],
+            'admin_role_id' => ['nullable', 'exists:admin_roles,id'],
+            'password' => ['nullable', 'confirmed', Password::min(8)],
+            'profile' => ['nullable', 'array'],
+            'profile.full_name' => ['nullable', 'string', 'max:255'],
+            'profile.job_title' => ['nullable', 'string', 'max:150'],
+            'profile.gender' => ['nullable', Rule::in(['male', 'female'])],
+            'profile.date_of_birth' => ['nullable', 'date'],
+            'profile.location' => ['nullable', 'string', 'max:255'],
+            'profile.phone' => ['nullable', 'regex:/^(?:\+256|256|0)?7\d{8}$/'],
+            'profile.district' => ['nullable', 'string', 'max:255'],
+            'profile.county' => ['nullable', 'string', 'max:255'],
+            'profile.subcounty' => ['nullable', 'string', 'max:255'],
+            'profile.parish' => ['nullable', 'string', 'max:255'],
+            'profile.village' => ['nullable', 'string', 'max:255'],
+            'profile.languages' => ['nullable', 'array'],
+            'profile.languages.*' => ['string', 'max:100'],
+            'profile.religion' => ['nullable', 'string', 'max:100'],
+            'profile.education_level' => ['nullable', Rule::in(self::EDUCATION_LEVELS)],
+            'profile.skills' => ['nullable', 'array'],
+            'profile.skills.*' => ['string', 'max:100'],
+            'profile.experience_years' => ['nullable', 'integer', 'min:0', 'max:80'],
+            'profile.bio' => ['nullable', 'string'],
+            'profile.work_experience' => ['nullable', 'string'],
+            'profile.preferred_job_categories' => ['nullable', 'array'],
+            'profile.preferred_job_categories.*' => ['string', 'max:100'],
+            'profile.is_available' => ['nullable', 'boolean'],
+            'profile.employer_type' => ['nullable', Rule::in(['company', 'individual'])],
+            'profile.company_name' => ['nullable', 'string', 'max:255'],
+            'profile.company_email' => ['nullable', 'email', 'max:255'],
+            'profile.company_phone' => ['nullable', 'regex:/^(?:\+256|256|0)?7\d{8}$/'],
+            'profile.company_location' => ['nullable', 'string', 'max:255'],
+            'profile.company_registration_number' => ['nullable', 'string', 'max:255'],
+            'profile.company_description' => ['nullable', 'string'],
+            'profile.preferred_worker_type' => ['nullable', 'string', 'max:255'],
+            'profile.website' => ['nullable', 'url', 'max:255'],
+        ]);
+
+        if ($request->user()->is($user) && (
+            $data['role'] !== 'admin'
+            || $data['status'] !== 'approved'
+            || (int) ($data['admin_role_id'] ?? 0) !== (int) ($user->admin_role_id ?? 0)
+        )) {
+            throw ValidationException::withMessages([
+                'user' => ['You cannot change your own admin role, account role, or approval status.'],
+            ]);
+        }
+
+        if (($data['role'] ?? null) !== 'admin') {
+            $data['admin_role_id'] = null;
+        }
+
+        if (($data['phone'] ?? null) !== $user->phone) {
+            $data['phone_verified_at'] = filled($data['phone'] ?? null) ? now() : null;
+        }
+
+        if (blank($data['password'] ?? null)) {
+            unset($data['password']);
+        }
+        unset($data['password_confirmation']);
+
+        $profileData = $data['profile'] ?? [];
+        unset($data['profile']);
+
+        $user->update($data);
+
+        $this->updateEditableProfile($user->fresh(), $profileData, $data['status']);
+
+        return response()->json(['message' => 'User account updated.', 'data' => $user->fresh()->load(['adminRole', 'jobSeekerProfile', 'employerProfile'])]);
+    }
+
+    private function updateEditableProfile(User $user, array $profileData, string $status): void
+    {
+        if ($profileData === [] || $user->role === 'admin') {
+            return;
+        }
+
+        $profileData = array_filter($profileData, fn ($value) => ! is_null($value));
+        $profileData['status'] = $status;
+
+        if ($user->role === 'job_seeker') {
+            if (filled($profileData['phone'] ?? null)) {
+                $profileData['phone'] = '+'.app(SmsService::class)->normalizePhone($profileData['phone']);
+            }
+
+            $allowed = [
+                'full_name',
+                'job_title',
+                'phone',
+                'district',
+                'county',
+                'subcounty',
+                'parish',
+                'village',
+                'education_level',
+                'experience_years',
+                'bio',
+                'status',
+            ];
+
+            $user->jobSeekerProfile()->updateOrCreate(
+                ['user_id' => $user->id],
+                collect($profileData)->only($allowed)->toArray() + ['full_name' => $user->name]
+            );
+        }
+
+        if ($user->role === 'employer') {
+            if (filled($profileData['company_phone'] ?? null)) {
+                $profileData['company_phone'] = '+'.app(SmsService::class)->normalizePhone($profileData['company_phone']);
+            }
+
+            $allowed = [
+                'employer_type',
+                'company_name',
+                'company_email',
+                'company_phone',
+                'company_location',
+                'district',
+                'county',
+                'subcounty',
+                'parish',
+                'village',
+                'company_registration_number',
+                'website',
+                'status',
+            ];
+
+            $user->employerProfile()->updateOrCreate(
+                ['user_id' => $user->id],
+                collect($profileData)->only($allowed)->toArray() + ['company_name' => $user->name]
+            );
+        }
     }
 
     private function availableStaffPermissions(): array
@@ -208,6 +368,7 @@ class AdminController extends Controller
             'manage_users' => 'Manage users',
             'view_users' => 'View users',
             'create_users' => 'Create staff users',
+            'edit_users' => 'Edit users',
             'suspend_users' => 'Suspend users',
 
             'manage_roles' => 'Manage roles and permissions',
@@ -226,6 +387,53 @@ class AdminController extends Controller
         $this->notifyUser($user, 'account_suspended', 'Account suspended', 'Your taziJobApp account has been suspended by an administrator.');
 
         return response()->json(['message' => 'User account suspended.', 'data' => $user]);
+    }
+
+    public function assignSubscription(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'subscription_package_id' => ['required', 'integer', 'exists:subscription_packages,id'],
+        ]);
+
+        if ($user->role !== 'job_seeker') {
+            throw ValidationException::withMessages([
+                'user' => ['Subscription packages can only be assigned to job seekers.'],
+            ]);
+        }
+
+        if ($user->activeJobSeekerSubscription()->exists()) {
+            throw ValidationException::withMessages([
+                'subscription' => ['This job seeker already has an active subscription.'],
+            ]);
+        }
+
+        $package = SubscriptionPackage::query()
+            ->where('is_active', true)
+            ->findOrFail($data['subscription_package_id']);
+
+        $subscription = JobSeekerSubscription::query()->create([
+            'user_id' => $user->id,
+            'subscription_package_id' => $package->id,
+            'amount_paid' => $package->price,
+            'job_chance_limit' => $package->job_chance_limit,
+            'priority_level' => $package->priority_level,
+            'status' => 'active',
+            'started_at' => now(),
+        ]);
+
+        SubscriptionPayment::query()->create([
+            'user_id' => $user->id,
+            'subscription_package_id' => $package->id,
+            'job_seeker_subscription_id' => $subscription->id,
+            'amount' => $package->price,
+            'type' => 'admin_assignment',
+            'status' => 'confirmed',
+        ]);
+
+        return response()->json([
+            'message' => 'Subscription package assigned.',
+            'data' => $subscription->load('package'),
+        ], 201);
     }
 
     public function showJobSeeker(JobSeekerProfile $profile)

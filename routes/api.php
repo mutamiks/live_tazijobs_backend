@@ -79,9 +79,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('stats', [AdminController::class, 'stats'])->middleware('permission:view_dashboard');
         Route::get('users', [AdminController::class, 'users'])->middleware('permission:manage_users,view_users');
         Route::post('users', [AdminController::class, 'storeUser'])->middleware('permission:manage_users,create_users');
+        Route::patch('users/{user}', [AdminController::class, 'updateUser'])->middleware('permission:manage_users,edit_users');
         Route::patch('users/{user}/suspend', [AdminController::class, 'suspendUser'])->middleware('permission:manage_users,suspend_users');
+        Route::post('users/{user}/subscription', [AdminController::class, 'assignSubscription'])->middleware('permission:manage_users,edit_users');
 
-        Route::get('roles', [AdminController::class, 'roles'])->middleware('permission:manage_roles,view_roles,create_roles,edit_roles,create_users');
+        Route::get('roles', [AdminController::class, 'roles'])->middleware('permission:manage_roles,view_roles,create_roles,edit_roles,create_users,manage_users,edit_users');
         Route::post('roles', [AdminController::class, 'storeRole'])->middleware('permission:manage_roles,create_roles');
         Route::patch('roles/{role}', [AdminController::class, 'updateRole'])->middleware('permission:manage_roles,edit_roles');
 

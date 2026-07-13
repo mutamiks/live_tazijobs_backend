@@ -44,9 +44,24 @@ class AuthController extends Controller
     public function login(LoginRequest $request)
     {
         $login = $request->validated('login') ?? $request->validated('email');
+        $phoneFormats = [];
+        if (preg_match('/^[+0-9\s().-]+$/', (string) $login)) {
+            $normalizedPhone = app(\App\Services\SmsService::class)->normalizePhone($login);
+            $phoneFormats = array_values(array_unique([
+                $login,
+                $normalizedPhone,
+                '+'.$normalizedPhone,
+                '0'.substr($normalizedPhone, 3),
+            ]));
+        }
+
         $user = User::query()
-            ->where('email', $login)
-            ->orWhere('phone', $login)
+            ->where(function ($query) use ($login, $phoneFormats) {
+                $query->where('email', $login);
+                if ($phoneFormats !== []) {
+                    $query->orWhereIn('phone', $phoneFormats);
+                }
+            })
             ->first();
 
         if (! $user || ! Hash::check($request->validated('password'), $user->password)) {
