@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
@@ -60,6 +61,18 @@ class Job extends Model
     public function applications(): HasMany
     {
         return $this->hasMany(JobApplication::class);
+    }
+
+    public function scopePubliclyVisible(Builder $query): Builder
+    {
+        return $query
+            ->where('status', 'approved')
+            ->whereHas('employer', fn (Builder $query) => $query->where('status', 'approved'));
+    }
+
+    public function isPubliclyVisible(): bool
+    {
+        return $this->status === 'approved' && $this->employer?->status === 'approved';
     }
 
     public function approvalHistories(): MorphMany

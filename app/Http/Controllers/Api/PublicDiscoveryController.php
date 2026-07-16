@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Job;
 use App\Models\JobSeekerProfile;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 class PublicDiscoveryController extends Controller
@@ -18,25 +17,20 @@ class PublicDiscoveryController extends Controller
         ]);
         $search = trim($data['search'] ?? '');
 
-        $payload = Cache::remember(
-            'public-discovery:'.sha1(mb_strtolower($search)),
-            now()->addSeconds(60),
-            fn () => [
-                'jobs' => $this->jobs($search),
-                'job_seekers' => $this->jobSeekers($search),
-            ],
-        );
+        $payload = [
+            'jobs' => $this->jobs($search),
+            'job_seekers' => $this->jobSeekers($search),
+        ];
 
         return response()
             ->json(['data' => $payload])
-            ->header('Cache-Control', 'public, max-age=60');
+            ->header('Cache-Control', 'no-store');
     }
 
     public function thumbnail(JobSeekerProfile $profile)
     {
         abort_unless(
-            $profile->status === 'approved'
-            && $profile->is_available
+            $profile->isPubliclyVisible()
             && $profile->profile_photo_thumbnail
             && Storage::disk('public')->exists($profile->profile_photo_thumbnail),
             404,
@@ -57,7 +51,7 @@ class PublicDiscoveryController extends Controller
                 'job_type', 'salary_min', 'salary_max', 'deadline', 'created_at',
             ])
             ->with('category:id,name')
-            ->where('status', 'approved')
+            ->publiclyVisible()
             ->where(fn ($query) => $query->whereNull('deadline')->orWhereDate('deadline', '>=', today()))
             ->when($search, function ($query, string $search) {
                 $query->where(function ($query) use ($search) {
@@ -79,8 +73,7 @@ class PublicDiscoveryController extends Controller
                 'id', 'full_name', 'job_title', 'district', 'skills',
                 'experience_years', 'profile_photo_thumbnail', 'created_at',
             ])
-            ->where('status', 'approved')
-            ->where('is_available', true)
+            ->publiclyVisible()
             ->when($search, function ($query, string $search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('job_title', 'like', "%{$search}%")

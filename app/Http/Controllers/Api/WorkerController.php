@@ -17,8 +17,7 @@ class WorkerController extends Controller
     {
         $workers = JobSeekerProfile::query()
             ->with('user')
-            ->where('status', 'approved')
-            ->where('is_available', true)
+            ->publiclyVisible()
             ->when($request->query('search'), function ($query, string $search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('full_name', 'like', "%{$search}%")
@@ -45,7 +44,7 @@ class WorkerController extends Controller
 
     public function show(JobSeekerProfile $worker)
     {
-        if ($worker->status !== 'approved' || ! $worker->is_available) {
+        if (! $worker->isPubliclyVisible()) {
             return response()->json(['message' => 'Worker not found.'], 404);
         }
 
@@ -55,8 +54,7 @@ class WorkerController extends Controller
     public function storeOrder(StoreWorkerOrderRequest $request)
     {
         $worker = JobSeekerProfile::query()
-            ->where('status', 'approved')
-            ->where('is_available', true)
+            ->publiclyVisible()
             ->findOrFail($request->validated('job_seeker_profile_id'));
 
         $order = WorkerOrder::query()->create($request->validated() + [

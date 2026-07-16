@@ -10,7 +10,7 @@ class StoreJobApplicationRequest extends FormRequest
     {
         return [
             'cover_letter' => ['nullable', 'string'],
-            'cv_file' => ['nullable', 'file', 'mimes:pdf,doc,docx', 'max:5120'],
+            'cv_file' => ['nullable', 'file', 'mimes:pdf,doc,docx', 'max:10240'],
         ];
     }
 }

@@ -25,8 +25,8 @@ class StoreEmployerProfileRequest extends FormRequest
             'preferred_worker_type' => ['nullable', 'string', 'max:255'],
             'preferred_job_categories' => ['nullable', 'array'],
             'preferred_job_categories.*' => ['string', 'max:100', Rule::exists('job_categories', 'name')->where('is_active', true)],
-            'company_logo' => ['nullable', 'image', 'max:2048'],
-            'business_document_file' => ['required_if:employer_type,company,individual', 'nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'company_logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+            'business_document_file' => ['required_if:employer_type,company,individual', 'nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
             'website' => ['nullable', 'url', 'max:255'],
         ];
     }

@@ -18,7 +18,7 @@ class JobController extends Controller
 
         $jobs = Job::query()
             ->with(['category', 'employer.employerProfile'])
-            ->where('status', 'approved')
+            ->publiclyVisible()
             ->when($request->query('job_category_id'), fn ($query, string $category) => $query->where('job_category_id', $category))
             ->when($request->query('search'), function ($query, string $search) {
                 $query->where('title', 'like', "%{$search}%");
@@ -87,7 +87,7 @@ class JobController extends Controller
 
         $jobs = Job::query()
             ->with(['category', 'employer.employerProfile'])
-            ->where('status', 'approved')
+            ->publiclyVisible()
             ->where(function ($query) use ($profile, $preferredCategories) {
                 $query->whereHas('category', fn ($query) => $query->whereIn('name', $preferredCategories))
                     ->orWhere('district', $profile->district);
@@ -106,7 +106,7 @@ class JobController extends Controller
             return $response;
         }
 
-        if ($job->status !== 'approved') {
+        if (! $job->isPubliclyVisible()) {
             return response()->json(['message' => 'Job not found.'], 404);
         }
 

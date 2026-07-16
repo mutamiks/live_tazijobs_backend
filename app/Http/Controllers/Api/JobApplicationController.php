@@ -16,7 +16,7 @@ class JobApplicationController extends Controller
 
     public function apply(StoreJobApplicationRequest $request, Job $job)
     {
-        if ($job->status !== 'approved') {
+        if (! $job->isPubliclyVisible()) {
             return response()->json(['message' => 'This job is not open for applications.'], 422);
         }
 

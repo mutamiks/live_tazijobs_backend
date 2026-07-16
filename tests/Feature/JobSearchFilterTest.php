@@ -66,4 +66,50 @@ class JobSearchFilterTest extends TestCase
             ->assertJsonCount(1, 'data.data')
             ->assertJsonPath('data.data.0.title', 'Laravel Developer');
     }
+
+    public function test_job_seekers_do_not_see_jobs_from_suspended_employers(): void
+    {
+        $activeEmployer = User::factory()->create(['role' => 'employer', 'status' => 'approved']);
+        $suspendedEmployer = User::factory()->create(['role' => 'employer', 'status' => 'suspended']);
+        $jobSeeker = User::factory()->create(['role' => 'job_seeker']);
+        $package = SubscriptionPackage::query()->create([
+            'name' => 'Starter',
+            'price' => 10000,
+            'job_chance_limit' => 2,
+            'priority_level' => 1,
+        ]);
+
+        JobSeekerSubscription::query()->create([
+            'user_id' => $jobSeeker->id,
+            'subscription_package_id' => $package->id,
+            'amount_paid' => $package->price,
+            'job_chance_limit' => $package->job_chance_limit,
+            'priority_level' => $package->priority_level,
+            'status' => 'active',
+            'started_at' => now(),
+        ]);
+
+        Job::query()->create([
+            'employer_id' => $activeEmployer->id,
+            'title' => 'Visible Driver',
+            'description' => 'Drive deliveries.',
+            'job_type' => 'full_time',
+            'status' => 'approved',
+        ]);
+
+        Job::query()->create([
+            'employer_id' => $suspendedEmployer->id,
+            'title' => 'Hidden Driver',
+            'description' => 'Suspended employer role.',
+            'job_type' => 'full_time',
+            'status' => 'approved',
+        ]);
+
+        Sanctum::actingAs($jobSeeker);
+
+        $this->getJson('/api/jobs?search=Driver')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.title', 'Visible Driver');
+    }
 }

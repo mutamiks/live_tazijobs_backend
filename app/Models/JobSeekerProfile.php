@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Facades\Storage;
@@ -74,6 +75,21 @@ class JobSeekerProfile extends Model
     public function approvalHistories(): MorphMany
     {
         return $this->morphMany(ApprovalHistory::class, 'approvable')->latest();
+    }
+
+    public function scopePubliclyVisible(Builder $query): Builder
+    {
+        return $query
+            ->where('status', 'approved')
+            ->where('is_available', true)
+            ->whereHas('user', fn (Builder $query) => $query->where('status', 'approved'));
+    }
+
+    public function isPubliclyVisible(): bool
+    {
+        return $this->status === 'approved'
+            && $this->is_available
+            && $this->user?->status === 'approved';
     }
 
     public function getProfilePhotoThumbnailUrlAttribute(): ?string
