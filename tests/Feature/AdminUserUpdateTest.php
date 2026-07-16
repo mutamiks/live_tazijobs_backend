@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\AdminRole;
 use App\Models\EmployerProfile;
 use App\Models\JobSeekerProfile;
+use App\Models\JobSeekerSubscription;
+use App\Models\SubscriptionPackage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -228,6 +230,40 @@ class AdminUserUpdateTest extends TestCase
             'company_phone' => '+256772000111',
             'company_location' => 'Kampala',
             'status' => 'approved',
+        ]);
+    }
+    public function test_admin_can_update_an_active_job_seeker_subscription_package(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
+        $jobSeeker = User::factory()->create(['role' => 'job_seeker', 'status' => 'approved']);
+        $starter = SubscriptionPackage::query()->create([
+            'name' => 'Starter', 'price' => 10000, 'job_chance_limit' => 2, 'priority_level' => 1, 'is_active' => true,
+        ]);
+        $professional = SubscriptionPackage::query()->create([
+            'name' => 'Professional', 'price' => 30000, 'job_chance_limit' => 6, 'priority_level' => 2, 'is_active' => true,
+        ]);
+        $subscription = JobSeekerSubscription::query()->create([
+            'user_id' => $jobSeeker->id,
+            'subscription_package_id' => $starter->id,
+            'amount_paid' => $starter->price,
+            'job_chance_limit' => $starter->job_chance_limit,
+            'priority_level' => $starter->priority_level,
+            'status' => 'active',
+            'started_at' => now(),
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->postJson("/api/admin/users/{$jobSeeker->id}/subscription", [
+            'subscription_package_id' => $professional->id,
+        ])->assertOk()
+            ->assertJsonPath('data.subscription_package_id', $professional->id)
+            ->assertJsonPath('data.package.name', 'Professional');
+
+        $this->assertDatabaseHas('job_seeker_subscriptions', [
+            'id' => $subscription->id,
+            'subscription_package_id' => $professional->id,
+            'job_chance_limit' => 6,
         ]);
     }
 }

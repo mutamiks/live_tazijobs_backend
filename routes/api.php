@@ -60,6 +60,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::middleware('permission:manage_employer_jobs')->group(function () {
             Route::post('employer/jobs', [JobController::class, 'store']);
             Route::get('employer/jobs', [JobController::class, 'employerJobs']);
+            Route::patch('employer/jobs/{job}', [JobController::class, 'update']);
         });
         Route::get('employer/applications', [JobApplicationController::class, 'employerApplications'])->middleware('permission:view_employer_applications');
         Route::patch('employer/applications/{application}/status', [JobApplicationController::class, 'updateStatus'])->middleware('permission:update_employer_application_status');
@@ -126,6 +127,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('applications/{application}/decision', [AdminController::class, 'decideApplication'])->middleware('permission:approve_applications');
 
         Route::get('worker-orders/pending', [AdminController::class, 'pendingWorkerOrders'])->middleware('permission:approve_worker_orders');
+        Route::get('contacted-job-seekers', [AdminController::class, 'contactedJobSeekers'])->middleware('permission:approve_worker_orders');
         Route::patch('worker-orders/{order}/decision', [AdminController::class, 'decideWorkerOrder'])->middleware('permission:approve_worker_orders');
 
         Route::get('subscription-packages', [AdminController::class, 'subscriptionPackages'])->middleware('permission:manage_subscription_packages,view_subscription_packages_admin');

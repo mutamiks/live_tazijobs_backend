@@ -134,4 +134,38 @@ class TaziJobAppWorkflowTest extends TestCase
             ->assertStatus(402)
             ->assertJsonPath('message', 'Subscribe to a package before searching for jobs.');
     }
+    public function test_employer_can_edit_own_job_and_set_number_of_positions(): void
+    {
+        $employer = User::factory()->create(['role' => 'employer']);
+        EmployerProfile::query()->create(['user_id' => $employer->id, 'company_name' => 'Bright Works', 'status' => 'approved']);
+        $category = JobCategory::query()->create(['name' => 'Domestic work']);
+        $job = Job::query()->create([
+            'employer_id' => $employer->id,
+            'job_category_id' => $category->id,
+            'title' => 'Cleaner',
+            'description' => 'Office cleaning.',
+            'job_type' => 'full_time',
+            'status' => 'approved',
+        ]);
+
+        Sanctum::actingAs($employer);
+
+        $this->patchJson("/api/employer/jobs/{$job->id}", [
+            'job_category_id' => $category->id,
+            'title' => 'Office Cleaner',
+            'positions' => 3,
+            'description' => 'Clean offices and common areas.',
+            'job_type' => 'full_time',
+        ])->assertOk()
+            ->assertJsonPath('data.title', 'Office Cleaner')
+            ->assertJsonPath('data.positions', 3)
+            ->assertJsonPath('data.status', 'pending');
+
+        $this->assertDatabaseHas('jobs', [
+            'id' => $job->id,
+            'positions' => 3,
+            'status' => 'pending',
+            'approved_by' => null,
+        ]);
+    }
 }

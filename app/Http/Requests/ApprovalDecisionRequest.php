@@ -12,6 +12,7 @@ class ApprovalDecisionRequest extends FormRequest
         return [
             'status' => ['required', Rule::in(['approved', 'rejected'])],
             'rejection_reason' => ['required_if:status,rejected', 'nullable', 'string'],
+            'subscription_package_id' => ['nullable', 'integer', 'exists:subscription_packages,id'],
         ];
     }
 }

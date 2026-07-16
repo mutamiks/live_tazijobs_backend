@@ -123,6 +123,31 @@ class JobController extends Controller
         return response()->json(['data' => $jobs]);
     }
 
+    public function update(StoreJobRequest $request, Job $job)
+    {
+        if ($job->employer_id !== $request->user()->id) {
+            return response()->json(['message' => 'Job not found.'], 404);
+        }
+
+        if (! $request->user()->employerProfile()->where('status', 'approved')->exists()) {
+            return response()->json(['message' => 'Employer profile must be approved before editing jobs.'], 422);
+        }
+
+        $data = collect($request->validated())->except('employer_id')->all();
+        $data['location'] = $data['location'] ?? $this->formatLocation($data);
+
+        $job->update($data + [
+            'status' => 'pending',
+            'rejection_reason' => null,
+            'approved_by' => null,
+            'approved_at' => null,
+        ]);
+
+        return response()->json([
+            'message' => 'Job changes submitted for approval.',
+            'data' => $job->fresh(),
+        ]);
+    }
     private function requireActiveSubscription(Request $request)
     {
         if (! $request->user()->activeJobSeekerSubscription()->exists()) {

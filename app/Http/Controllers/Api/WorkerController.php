@@ -57,6 +57,13 @@ class WorkerController extends Controller
             ->publiclyVisible()
             ->findOrFail($request->validated('job_seeker_profile_id'));
 
+        if (WorkerOrder::query()
+            ->where('employer_id', $request->user()->id)
+            ->where('job_seeker_profile_id', $worker->id)
+            ->where('status', 'pending')
+            ->exists()) {
+            return response()->json(['message' => 'You already have a pending request for this job seeker.'], 422);
+        }
         $order = WorkerOrder::query()->create($request->validated() + [
             'employer_id' => $request->user()->id,
             'status' => 'pending',

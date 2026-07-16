@@ -174,6 +174,7 @@ class AdminController extends Controller
 
         $user = User::query()->create($data + ['status' => 'approved']);
 
+        
         $this->notifyUser(
             $user,
             'account_created_by_admin',
@@ -401,44 +402,50 @@ class AdminController extends Controller
             ]);
         }
 
-        if ($user->activeJobSeekerSubscription()->exists()) {
-            throw ValidationException::withMessages([
-                'subscription' => ['This job seeker already has an active subscription.'],
-            ]);
-        }
-
         $package = SubscriptionPackage::query()
             ->where('is_active', true)
             ->findOrFail($data['subscription_package_id']);
 
-        $subscription = JobSeekerSubscription::query()->create([
-            'user_id' => $user->id,
-            'subscription_package_id' => $package->id,
-            'amount_paid' => $package->price,
-            'job_chance_limit' => $package->job_chance_limit,
-            'priority_level' => $package->priority_level,
-            'status' => 'active',
-            'started_at' => now(),
-        ]);
+        $subscription = $user->activeJobSeekerSubscription()->first();
+        $isUpdate = $subscription !== null;
+
+        if ($subscription) {
+            $subscription->forceFill([
+                'subscription_package_id' => $package->id,
+                'amount_paid' => $package->price,
+                'job_chance_limit' => $package->job_chance_limit,
+                'job_chances_used' => min($subscription->job_chances_used, $package->job_chance_limit),
+                'priority_level' => $package->priority_level,
+            ])->save();
+        } else {
+            $subscription = JobSeekerSubscription::query()->create([
+                'user_id' => $user->id,
+                'subscription_package_id' => $package->id,
+                'amount_paid' => $package->price,
+                'job_chance_limit' => $package->job_chance_limit,
+                'priority_level' => $package->priority_level,
+                'status' => 'active',
+                'started_at' => now(),
+            ]);
+        }
 
         SubscriptionPayment::query()->create([
             'user_id' => $user->id,
             'subscription_package_id' => $package->id,
             'job_seeker_subscription_id' => $subscription->id,
             'amount' => $package->price,
-            'type' => 'admin_assignment',
+            'type' => $isUpdate ? 'admin_update' : 'admin_assignment',
             'status' => 'confirmed',
         ]);
 
         return response()->json([
-            'message' => 'Subscription package assigned.',
-            'data' => $subscription->load('package'),
-        ], 201);
+            'message' => $isUpdate ? 'Subscription package updated.' : 'Subscription package assigned.',
+            'data' => $subscription->fresh('package'),
+        ], $isUpdate ? 200 : 201);
     }
-
     public function showJobSeeker(JobSeekerProfile $profile)
     {
-        return response()->json(['data' => $profile->load(['user', 'approver', 'approvalHistories.admin'])]);
+        return response()->json(['data' => $profile->load(['user.activeJobSeekerSubscription.package', 'approver', 'approvalHistories.admin'])]);
     }
 
     public function pendingJobSeekers(Request $request)
@@ -493,7 +500,7 @@ class AdminController extends Controller
 
     public function showEmployer(EmployerProfile $profile)
     {
-        return response()->json(['data' => $profile->load(['user', 'approver', 'approvalHistories.admin'])]);
+        return response()->json(['data' => $profile->load(['user.activeJobSeekerSubscription.package', 'approver', 'approvalHistories.admin'])]);
     }
 
     public function pendingJobs(Request $request)
@@ -593,6 +600,7 @@ class AdminController extends Controller
             'approved_at' => now(),
         ])->save();
 
+        
         $this->notifyUser(
             $application->jobSeeker,
             'job_application_approval',
@@ -603,7 +611,8 @@ class AdminController extends Controller
         );
 
         if ($approved) {
-            $this->notifyUser(
+            
+        $this->notifyUser(
                 $application->job->employer,
                 'job_application',
                 'New approved job application',
@@ -614,6 +623,24 @@ class AdminController extends Controller
         return response()->json(['message' => "Application {$data['status']}.", 'data' => $application->fresh(['job', 'jobSeeker'])]);
     }
 
+    public function contactedJobSeekers(Request $request)
+    {
+        $orders = WorkerOrder::query()
+            ->with(['employer.employerProfile', 'worker.user', 'approver'])
+            ->when($request->query('search'), function ($query, string $search) {
+                $query->where(function ($query) use ($search) {
+                    $query->where('job_description', 'like', "%{$search}%")
+                        ->orWhere('job_location', 'like', "%{$search}%")
+                        ->orWhereHas('worker', fn ($query) => $query->where('full_name', 'like', "%{$search}%"))
+                        ->orWhereHas('employer', fn ($query) => $query->where('name', 'like', "%{$search}%"));
+                });
+            })
+            ->when($request->query('status'), fn ($query, string $status) => $query->where('status', $status))
+            ->latest()
+            ->paginate(20);
+
+        return response()->json(['data' => $orders]);
+    }
     public function pendingWorkerOrders()
     {
         return response()->json([
@@ -626,6 +653,10 @@ class AdminController extends Controller
         $data = $request->validated();
         $approved = $data['status'] === 'approved';
 
+        if ($order->status !== 'pending') {
+            return response()->json(['message' => 'This worker request has already been decided.'], 422);
+        }
+
         $order->forceFill([
             'status' => $data['status'],
             'rejection_reason' => $approved ? null : $data['rejection_reason'],
@@ -633,6 +664,7 @@ class AdminController extends Controller
             'approved_at' => now(),
         ])->save();
 
+        
         $this->notifyUser(
             $order->employer,
             'worker_order',
@@ -640,11 +672,12 @@ class AdminController extends Controller
             $approved ? 'Your worker request has been approved.' : "Your worker request was rejected: {$order->rejection_reason}"
         );
 
+        
         $this->notifyUser(
             $order->worker->user,
             'worker_order',
             "Worker request {$data['status']}",
-            $approved ? 'A worker request involving your profile has been approved.' : 'A worker request involving your profile was rejected.'
+            $approved ? "An employer request has been approved: {$order->job_description} in {$order->job_location}, starting {$order->start_date?->format('j M Y')}. Offered salary: UGX {$order->salary_offered}." : 'A worker request involving your profile was rejected.'
         );
 
         return response()->json(['message' => "Worker request {$data['status']}.", 'data' => $order->fresh(['employer', 'worker.user'])]);
@@ -671,6 +704,46 @@ class AdminController extends Controller
         return response()->json(['message' => 'Subscription package updated.', 'data' => $package->fresh()]);
     }
 
+    private function saveSubscriptionPackage(User $user, int $packageId): JobSeekerSubscription
+    {
+        $package = SubscriptionPackage::query()
+            ->where('is_active', true)
+            ->findOrFail($packageId);
+
+        $subscription = $user->activeJobSeekerSubscription()->first();
+        $isUpdate = $subscription !== null;
+
+        if ($subscription) {
+            $subscription->forceFill([
+                'subscription_package_id' => $package->id,
+                'amount_paid' => $package->price,
+                'job_chance_limit' => $package->job_chance_limit,
+                'job_chances_used' => min($subscription->job_chances_used, $package->job_chance_limit),
+                'priority_level' => $package->priority_level,
+            ])->save();
+        } else {
+            $subscription = JobSeekerSubscription::query()->create([
+                'user_id' => $user->id,
+                'subscription_package_id' => $package->id,
+                'amount_paid' => $package->price,
+                'job_chance_limit' => $package->job_chance_limit,
+                'priority_level' => $package->priority_level,
+                'status' => 'active',
+                'started_at' => now(),
+            ]);
+        }
+
+        SubscriptionPayment::query()->create([
+            'user_id' => $user->id,
+            'subscription_package_id' => $package->id,
+            'job_seeker_subscription_id' => $subscription->id,
+            'amount' => $package->price,
+            'type' => $isUpdate ? 'admin_update' : 'admin_assignment',
+            'status' => 'confirmed',
+        ]);
+
+        return $subscription->fresh('package');
+    }
     private function decide(ApprovalDecisionRequest $request, mixed $model, User $owner, string $type, string $label)
     {
         $data = $request->validated();
@@ -695,6 +768,9 @@ class AdminController extends Controller
             $owner->forceFill(['status' => $data['status']])->save();
         }
 
+        if ($approved && $model instanceof JobSeekerProfile && filled($data['subscription_package_id'] ?? null)) {
+            $this->saveSubscriptionPackage($owner, (int) $data['subscription_package_id']);
+        }
         $this->notifyUser(
             $owner,
             $type,

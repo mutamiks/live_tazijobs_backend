@@ -12,3 +12,8 @@ Schedule::command('sms:process-payments')
     ->everyFiveMinutes()
     ->withoutOverlapping()
     ->onOneServer();
+
+Schedule::command('migrations:run-pending')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();

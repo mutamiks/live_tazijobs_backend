@@ -6,6 +6,7 @@ use App\Models\JobSeekerProfile;
 use App\Models\Language;
 use App\Models\Notification;
 use App\Models\Religion;
+use App\Models\SubscriptionPackage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -87,5 +88,36 @@ class ApprovalHistoryTest extends TestCase
         ])->assertCreated()
             ->assertJsonPath('data.status', 'pending')
             ->assertJsonPath('data.rejection_reason', null);
+    }
+    public function test_admin_can_assign_a_subscription_while_approving_a_job_seeker(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
+        $jobSeeker = User::factory()->create(['role' => 'job_seeker', 'status' => 'pending']);
+        $profile = JobSeekerProfile::query()->create([
+            'user_id' => $jobSeeker->id,
+            'full_name' => 'Jane Applicant',
+            'status' => 'pending',
+        ]);
+        $package = SubscriptionPackage::query()->create([
+            'name' => 'Starter',
+            'price' => 10000,
+            'job_chance_limit' => 2,
+            'priority_level' => 1,
+            'is_active' => true,
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/job-seeker-profiles/{$profile->id}/decision", [
+            'status' => 'approved',
+            'subscription_package_id' => $package->id,
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'approved');
+
+        $this->assertDatabaseHas('job_seeker_subscriptions', [
+            'user_id' => $jobSeeker->id,
+            'subscription_package_id' => $package->id,
+            'status' => 'active',
+        ]);
     }
 }
