@@ -24,16 +24,6 @@ class JobApplicationController extends Controller
             return response()->json(['message' => 'Job seeker profile must be approved before applying.'], 422);
         }
 
-        $subscription = $request->user()->activeJobSeekerSubscription()->first();
-
-        if (! $subscription) {
-            return response()->json(['message' => 'Subscribe to a package before applying for jobs.'], 402);
-        }
-
-        if (! $subscription->hasRemainingChances()) {
-            return response()->json(['message' => 'Your package job chances are finished. Upgrade your package by topping up.'], 422);
-        }
-
         $data = $request->validated();
         $data['cv_file'] = $request->file('cv_file')?->store('application-cvs', 'public') ?? ($data['cv_file'] ?? null);
 
@@ -43,8 +33,6 @@ class JobApplicationController extends Controller
             'status' => 'submitted',
             'approval_status' => 'pending',
         ]);
-
-        $subscription->increment('job_chances_used');
 
         $this->notifyUser($request->user(), 'job_application_pending', 'Application submitted for review', "Your application for {$job->title} is pending admin approval.");
 

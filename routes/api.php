@@ -45,6 +45,9 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('subscriptions/current', [SubscriptionController::class, 'current']);
             Route::post('subscriptions', [SubscriptionController::class, 'subscribe']);
             Route::post('subscriptions/upgrade', [SubscriptionController::class, 'upgrade']);
+            Route::patch('subscriptions/payments/{payment}/refresh', [SubscriptionController::class, 'refreshPayment']);
+            Route::get('invoices', [SubscriptionController::class, 'invoices']);
+            Route::post('invoices/{payment}/pay', [SubscriptionController::class, 'payInvoice']);
         });
         Route::middleware('permission:browse_jobs')->group(function () {
             Route::get('jobs', [JobController::class, 'index']);
@@ -83,6 +86,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('users/{user}', [AdminController::class, 'updateUser'])->middleware('permission:manage_users,edit_users');
         Route::patch('users/{user}/suspend', [AdminController::class, 'suspendUser'])->middleware('permission:manage_users,suspend_users');
         Route::post('users/{user}/subscription', [AdminController::class, 'assignSubscription'])->middleware('permission:manage_users,edit_users');
+        Route::post('users/{user}/invoices', [AdminController::class, 'createInvoice'])->middleware('permission:manage_invoices,create_invoices,manage_users');
+        Route::get('invoices', [AdminController::class, 'invoices'])->middleware('permission:manage_invoices,view_invoices,manage_users');
 
         Route::get('roles', [AdminController::class, 'roles'])->middleware('permission:manage_roles,view_roles,create_roles,edit_roles,create_users,manage_users,edit_users');
         Route::post('roles', [AdminController::class, 'storeRole'])->middleware('permission:manage_roles,create_roles');

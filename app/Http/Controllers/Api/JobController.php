@@ -12,10 +12,6 @@ class JobController extends Controller
 {
     public function index(Request $request)
     {
-        if ($response = $this->requireActiveSubscription($request)) {
-            return $response;
-        }
-
         $jobs = Job::query()
             ->with(['category', 'employer.employerProfile'])
             ->publiclyVisible()
@@ -73,10 +69,6 @@ class JobController extends Controller
 
     public function matching(Request $request)
     {
-        if ($response = $this->requireActiveSubscription($request)) {
-            return $response;
-        }
-
         $profile = $request->user()->jobSeekerProfile;
 
         if (! $profile || $profile->status !== 'approved') {
@@ -102,10 +94,6 @@ class JobController extends Controller
 
     public function show(Request $request, Job $job)
     {
-        if ($response = $this->requireActiveSubscription($request)) {
-            return $response;
-        }
-
         if (! $job->isPubliclyVisible()) {
             return response()->json(['message' => 'Job not found.'], 404);
         }
@@ -148,17 +136,6 @@ class JobController extends Controller
             'data' => $job->fresh(),
         ]);
     }
-    private function requireActiveSubscription(Request $request)
-    {
-        if (! $request->user()->activeJobSeekerSubscription()->exists()) {
-            return response()->json([
-                'message' => 'Subscribe to a package before searching for jobs.',
-            ], 402);
-        }
-
-        return null;
-    }
-
     private function publicJobPayload(Job $job): array
     {
         $payload = $job->toArray();

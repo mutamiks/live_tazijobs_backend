@@ -43,7 +43,7 @@ class SmsManagementController extends Controller
         try {
             $provider = $this->sms->requestPayment((float) $data['amount'], $data['phone']);
             if (strtoupper($provider['Status'] ?? '') === 'ERROR') {
-                throw ValidationException::withMessages(['payment' => $provider['StatusMessage'] ?? 'Payment request failed.']);
+                throw ValidationException::withMessages(['payment' => $this->sms->providerMessage($provider)]);
             }
             $payment = SmsPayment::query()->create([
                 ...$data,

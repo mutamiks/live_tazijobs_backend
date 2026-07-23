@@ -82,19 +82,30 @@ class SmsService
         return trim($response->body());
     }
 
-    public function requestPayment(float $amount, string $phone): array
+    public function requestPayment(float $amount, string $phone, string $purpose = 'SMS Payment'): array
     {
         $this->ensureConfigured(true);
-        $reference = 'TAZI-SMS-'.str()->upper(str()->random(12));
+        $reference = 'TAZI-'.str()->upper(str()->slug($purpose, '-')).'-'.str()->upper(str()->random(12));
         $xml = '<?xml version="1.0" encoding="UTF-8"?><AutoCreate><Request>'
             .'<APIUsername>'.$this->xml(config('sms.payment_username')).'</APIUsername>'
             .'<APIPassword>'.$this->xml(config('sms.payment_password')).'</APIPassword>'
             .'<Method>'.$this->xml(config('sms.payment_method')).'</Method><NonBlocking>TRUE</NonBlocking>'
             .'<Amount>'.$amount.'</Amount><Account>'.$this->xml($phone).'</Account>'
             .'<Narrative>'.$reference.'</Narrative><ExternalReference>TaziJobs</ExternalReference>'
-            .'<ProviderReferenceText>SMS Payment</ProviderReferenceText></Request></AutoCreate>';
+            .'<ProviderReferenceText>'.$this->xml($purpose).'</ProviderReferenceText></Request></AutoCreate>';
 
         return $this->paymentRequest($xml);
+    }
+
+    public function providerMessage(array $provider, string $fallback = 'Payment request failed.'): string
+    {
+        return $provider['StatusMessage']
+            ?? $provider['Message']
+            ?? $provider['ErrorMessage']
+            ?? $provider['Error']
+            ?? $provider['TransactionStatus']
+            ?? $provider['Status']
+            ?? $fallback;
     }
 
     public function paymentStatus(string $reference): array
@@ -143,7 +154,17 @@ class SmsService
             throw new RuntimeException('The payment provider returned an invalid response.');
         }
 
-        return json_decode(json_encode($parsed), true)['Response'] ?? [];
+        $payload = json_decode(json_encode($parsed), true);
+        $provider = $payload['Response'] ?? $payload;
+
+        Log::info('Yo payment provider response', [
+            'status' => $provider['Status'] ?? null,
+            'transaction_status' => $provider['TransactionStatus'] ?? null,
+            'message' => $this->providerMessage($provider, ''),
+            'transaction_reference' => $provider['TransactionReference'] ?? null,
+        ]);
+
+        return $provider;
     }
 
     private function gatewayUrl(): string

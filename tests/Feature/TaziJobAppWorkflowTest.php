@@ -124,15 +124,22 @@ class TaziJobAppWorkflowTest extends TestCase
             ->assertJsonPath('message', 'Application must be approved by admin first.');
     }
 
-    public function test_job_seeker_must_subscribe_before_searching_jobs(): void
+    public function test_job_seeker_can_search_jobs_without_subscription(): void
     {
         $jobSeeker = User::factory()->create(['role' => 'job_seeker']);
+        Job::query()->create([
+            'employer_id' => User::factory()->create(['role' => 'employer'])->id,
+            'title' => 'Junior Developer',
+            'description' => 'Build and support Laravel APIs.',
+            'job_type' => 'remote',
+            'status' => 'approved',
+        ]);
 
         Sanctum::actingAs($jobSeeker);
 
         $this->getJson('/api/jobs')
-            ->assertStatus(402)
-            ->assertJsonPath('message', 'Subscribe to a package before searching for jobs.');
+            ->assertOk()
+            ->assertJsonPath('data.data.0.title', 'Junior Developer');
     }
     public function test_employer_can_edit_own_job_and_set_number_of_positions(): void
     {

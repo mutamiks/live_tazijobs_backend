@@ -365,6 +365,9 @@ class AdminController extends Controller
             'view_subscription_packages_admin' => 'View subscription packages',
             'create_subscription_packages' => 'Create subscription packages',
             'edit_subscription_packages' => 'Edit subscription packages',
+            'manage_invoices' => 'Manage job seeker invoices',
+            'view_invoices' => 'View job seeker invoices',
+            'create_invoices' => 'Create job seeker invoices',
 
             'manage_users' => 'Manage users',
             'view_users' => 'View users',
@@ -443,6 +446,81 @@ class AdminController extends Controller
             'data' => $subscription->fresh('package'),
         ], $isUpdate ? 200 : 201);
     }
+
+    public function createInvoice(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'subscription_package_id' => ['required', 'integer', 'exists:subscription_packages,id'],
+            'job_id' => ['required', 'integer', 'exists:jobs,id'],
+            'amount' => ['nullable', 'numeric', 'min:1'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'admin_notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        if ($user->role !== 'job_seeker' || $user->status !== 'approved') {
+            throw ValidationException::withMessages([
+                'user' => ['Invoices can only be generated for approved job seekers.'],
+            ]);
+        }
+
+        $package = SubscriptionPackage::query()
+            ->where('is_active', true)
+            ->findOrFail($data['subscription_package_id']);
+        $job = Job::query()
+            ->where('status', 'approved')
+            ->findOrFail($data['job_id']);
+
+        $invoice = SubscriptionPayment::query()->create([
+            'user_id' => $user->id,
+            'subscription_package_id' => $package->id,
+            'job_id' => $job->id,
+            'created_by' => $request->user()->id,
+            'invoice_number' => $this->invoiceNumber(),
+            'amount' => $data['amount'] ?? $package->price,
+            'description' => $data['description'] ?? "Invoice for {$package->name} package and {$job->title}.",
+            'admin_notes' => $data['admin_notes'] ?? null,
+            'type' => 'invoice',
+            'status' => 'unpaid',
+            'status_message' => 'Invoice generated. Awaiting payment.',
+        ]);
+
+        $this->notifyUser(
+            $user,
+            'subscription_invoice',
+            'New invoice generated',
+            "An invoice for {$job->title} has been generated. Amount: UGX ".number_format((float) $invoice->amount).'.'
+        );
+
+        return response()->json([
+            'message' => 'Invoice generated.',
+            'data' => $invoice->load(['user.jobSeekerProfile', 'package', 'job.employer.employerProfile', 'creator:id,name']),
+        ], 201);
+    }
+
+    public function invoices(Request $request)
+    {
+        $request->validate([
+            'status' => ['nullable', 'string', 'max:50'],
+            'search' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $query = SubscriptionPayment::query()
+            ->with(['user.jobSeekerProfile', 'package', 'job.employer.employerProfile', 'creator:id,name'])
+            ->whereNotNull('invoice_number')
+            ->latest();
+
+        $query->when($request->query('status'), fn ($query, string $status) => $query->where('status', $status));
+        $query->when($request->query('search'), function ($query, string $search) {
+            $query->where(function ($query) use ($search) {
+                $query->where('invoice_number', 'like', "%{$search}%")
+                    ->orWhereHas('user', fn ($query) => $query->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%"))
+                    ->orWhereHas('job', fn ($query) => $query->where('title', 'like', "%{$search}%"));
+            });
+        });
+
+        return response()->json(['data' => $query->paginate(25)]);
+    }
+
     public function showJobSeeker(JobSeekerProfile $profile)
     {
         return response()->json(['data' => $profile->load(['user.activeJobSeekerSubscription.package', 'approver', 'approvalHistories.admin'])]);
@@ -744,6 +822,16 @@ class AdminController extends Controller
 
         return $subscription->fresh('package');
     }
+
+    private function invoiceNumber(): string
+    {
+        do {
+            $number = 'TZINV-'.now()->format('Ymd').'-'.Str::upper(Str::random(6));
+        } while (SubscriptionPayment::query()->where('invoice_number', $number)->exists());
+
+        return $number;
+    }
+
     private function decide(ApprovalDecisionRequest $request, mixed $model, User $owner, string $type, string $label)
     {
         $data = $request->validated();

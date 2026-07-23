@@ -15,6 +15,7 @@ class SubscribeRequest extends FormRequest
     {
         return [
             'subscription_package_id' => ['required', 'integer', 'exists:subscription_packages,id'],
+            'phone' => ['required', 'regex:/^(?:\+?256|0)?7\d{8}$/'],
         ];
     }
 }
