@@ -16,6 +16,23 @@ class AdminUserUpdateTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_dashboard_job_seeker_counts_match_user_account_statuses(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        User::factory()->count(3)->create(['role' => 'job_seeker', 'status' => 'pending']);
+        User::factory()->count(2)->create(['role' => 'job_seeker', 'status' => 'approved']);
+        User::factory()->create(['role' => 'employer', 'status' => 'pending']);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/admin/stats')
+            ->assertOk()
+            ->assertJsonPath('data.total_job_seekers', 5)
+            ->assertJsonPath('data.job_seekers_pending', 3)
+            ->assertJsonPath('data.job_seekers_approved', 2)
+            ->assertJsonPath('data.employers_pending', 1);
+    }
+
     public function test_admin_can_update_user_account_details(): void
     {
         $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
