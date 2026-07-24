@@ -393,6 +393,15 @@ class AdminController extends Controller
         return response()->json(['message' => 'User account suspended.', 'data' => $user]);
     }
 
+    public function reactivateUser(User $user)
+    {
+        $user->forceFill(['status' => 'approved'])->save();
+
+        $this->notifyUser($user, 'account_reactivated', 'Account reactivated', 'Your TaziJobs account has been reactivated by an administrator.');
+
+        return response()->json(['message' => 'User account reactivated.', 'data' => $user]);
+    }
+
     public function assignSubscription(Request $request, User $user)
     {
         $data = $request->validate([
@@ -451,9 +460,8 @@ class AdminController extends Controller
     {
         $data = $request->validate([
             'subscription_package_id' => ['required', 'integer', 'exists:subscription_packages,id'],
-            'job_id' => ['required', 'integer', 'exists:jobs,id'],
             'amount' => ['nullable', 'numeric', 'min:1'],
-            'description' => ['nullable', 'string', 'max:1000'],
+            'description' => ['required', 'string', 'max:1000'],
             'admin_notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -466,18 +474,13 @@ class AdminController extends Controller
         $package = SubscriptionPackage::query()
             ->where('is_active', true)
             ->findOrFail($data['subscription_package_id']);
-        $job = Job::query()
-            ->where('status', 'approved')
-            ->findOrFail($data['job_id']);
-
         $invoice = SubscriptionPayment::query()->create([
             'user_id' => $user->id,
             'subscription_package_id' => $package->id,
-            'job_id' => $job->id,
             'created_by' => $request->user()->id,
             'invoice_number' => $this->invoiceNumber(),
             'amount' => $data['amount'] ?? $package->price,
-            'description' => $data['description'] ?? "Invoice for {$package->name} package and {$job->title}.",
+            'description' => $data['description'],
             'admin_notes' => $data['admin_notes'] ?? null,
             'type' => 'invoice',
             'status' => 'unpaid',
@@ -488,7 +491,7 @@ class AdminController extends Controller
             $user,
             'subscription_invoice',
             'New invoice generated',
-            "An invoice for {$job->title} has been generated. Amount: UGX ".number_format((float) $invoice->amount).'.'
+            "An invoice has been generated. Amount: UGX ".number_format((float) $invoice->amount).'.'
         );
 
         return response()->json([
@@ -620,6 +623,20 @@ class AdminController extends Controller
                 })
                 ->latest()
                 ->paginate(10),
+        ]);
+    }
+
+    public function toggleJobListing(Job $job)
+    {
+        if ($job->status !== 'approved') {
+            return response()->json(['message' => 'Only approved jobs can be listed or unlisted.'], 422);
+        }
+
+        $job->forceFill(['is_listed' => ! $job->is_listed])->save();
+
+        return response()->json([
+            'message' => $job->is_listed ? 'Job listed.' : 'Job unlisted.',
+            'data' => $job->fresh(['category', 'employer.employerProfile']),
         ]);
     }
 

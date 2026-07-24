@@ -55,4 +55,40 @@ class AdminJobSearchTest extends TestCase
             ->assertOk()
             ->assertJsonCount(0, 'data.data');
     }
+
+    public function test_admin_can_unlist_and_relist_approved_job(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $jobSeeker = User::factory()->create(['role' => 'job_seeker']);
+        $job = Job::query()->create([
+            'employer_id' => User::factory()->create(['role' => 'employer', 'status' => 'approved'])->id,
+            'title' => 'Cleaner',
+            'description' => 'Office cleaning.',
+            'job_type' => 'full_time',
+            'status' => 'approved',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/jobs/{$job->id}/toggle-listing")
+            ->assertOk()
+            ->assertJsonPath('data.is_listed', false);
+
+        Sanctum::actingAs($jobSeeker);
+
+        $this->getJson('/api/jobs')
+            ->assertOk()
+            ->assertJsonCount(0, 'data.data');
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/admin/jobs')
+            ->assertOk()
+            ->assertJsonPath('data.data.0.title', 'Cleaner')
+            ->assertJsonPath('data.data.0.is_listed', false);
+
+        $this->patchJson("/api/admin/jobs/{$job->id}/toggle-listing")
+            ->assertOk()
+            ->assertJsonPath('data.is_listed', true);
+    }
 }

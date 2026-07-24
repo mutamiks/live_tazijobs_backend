@@ -149,6 +149,40 @@ class AuthController extends Controller
         return response()->json(['message' => 'Password reset successfully. You can now sign in.']);
     }
 
+    public function sendReactivationCode(Request $request)
+    {
+        $data = $request->validate(['phone' => ['required', 'regex:/^(?:\+256|256|0)?7\d{8}$/']]);
+        $normalized = app(\App\Services\SmsService::class)->normalizePhone($data['phone']);
+        $local = '0'.substr($normalized, 3);
+        $user = User::query()->whereIn('phone', [$data['phone'], $normalized, '+'.$normalized, $local])->first();
+
+        if ($user && $user->status === 'suspended') {
+            $this->verification->send($user->phone, 'account_reactivation');
+        }
+
+        return response()->json(['message' => 'If that suspended account exists, a reactivation code has been sent.']);
+    }
+
+    public function reactivateAccount(Request $request)
+    {
+        $data = $request->validate([
+            'phone' => ['required', 'regex:/^(?:\+256|256|0)?7\d{8}$/'],
+            'code' => ['required', 'digits:6'],
+        ]);
+        $normalized = app(\App\Services\SmsService::class)->normalizePhone($data['phone']);
+        $local = '0'.substr($normalized, 3);
+        $user = User::query()->whereIn('phone', [$data['phone'], $normalized, '+'.$normalized, $local])->first();
+
+        if (! $user || $user->status !== 'suspended') {
+            throw ValidationException::withMessages(['phone' => 'The phone number or code is invalid.']);
+        }
+
+        $this->verification->verify($user->phone, 'account_reactivation', $data['code']);
+        $user->forceFill(['status' => 'approved'])->save();
+
+        return response()->json(['message' => 'Account reactivated. You can now sign in.']);
+    }
+
     public function resetPassword(Request $request)
     {
         $data = $request->validate([

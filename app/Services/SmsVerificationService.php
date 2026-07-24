@@ -21,9 +21,11 @@ class SmsVerificationService
             'expires_at' => now()->addMinutes(10),
         ]);
 
-        $message = $purpose === 'password_reset'
-            ? "TaziJobs password reset code: {$code}. Expires in 10 minutes."
-            : "TaziJobs verification code: {$code}. Expires in 10 minutes.";
+        $message = match ($purpose) {
+            'password_reset' => "TaziJobs password reset code: {$code}. Expires in 10 minutes.",
+            'account_reactivation' => "TaziJobs account reactivation code: {$code}. Expires in 10 minutes.",
+            default => "TaziJobs verification code: {$code}. Expires in 10 minutes.",
+        };
 
         try {
             $this->sms->send($phone, $message);

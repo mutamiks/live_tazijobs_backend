@@ -32,6 +32,7 @@ class Job extends Model
         'rejection_reason',
         'approved_by',
         'approved_at',
+        'is_listed',
     ];
 
     protected function casts(): array
@@ -41,6 +42,7 @@ class Job extends Model
             'salary_max' => 'decimal:2',
             'deadline' => 'date',
             'approved_at' => 'datetime',
+            'is_listed' => 'boolean',
         ];
     }
 
@@ -68,12 +70,13 @@ class Job extends Model
     {
         return $query
             ->where('status', 'approved')
+            ->where('is_listed', true)
             ->whereHas('employer', fn (Builder $query) => $query->where('status', 'approved'));
     }
 
     public function isPubliclyVisible(): bool
     {
-        return $this->status === 'approved' && $this->employer?->status === 'approved';
+        return $this->status === 'approved' && $this->is_listed && $this->employer?->status === 'approved';
     }
 
     public function approvalHistories(): MorphMany

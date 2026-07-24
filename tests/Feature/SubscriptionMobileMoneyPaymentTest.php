@@ -148,7 +148,6 @@ class SubscriptionMobileMoneyPaymentTest extends TestCase
 
         $invoice = $this->postJson("/api/admin/users/{$jobSeeker->id}/invoices", [
             'subscription_package_id' => $package->id,
-            'job_id' => $job->id,
             'amount' => 16000,
             'description' => 'Placement invoice.',
             'admin_notes' => 'Call before payment.',
@@ -169,5 +168,51 @@ class SubscriptionMobileMoneyPaymentTest extends TestCase
             ->assertJsonPath('data.status', 'pending')
             ->assertJsonPath('data.phone', '256772123456')
             ->assertJsonPath('data.transaction_reference', 'INV-123');
+    }
+
+    public function test_suspended_job_seeker_can_still_view_and_refresh_own_invoice(): void
+    {
+        config([
+            'sms.enabled' => true,
+            'sms.payment_url' => 'https://payments.example.test/task.php',
+            'sms.payment_username' => 'merchant',
+            'sms.payment_password' => 'secret',
+            'sms.payment_status_method' => 'actransactioncheckstatus',
+        ]);
+
+        Http::fake([
+            'payments.example.test/*' => Http::response(
+                '<?xml version="1.0"?><AutoCreate><Response><Status>OK</Status><TransactionStatus>SUCCEEDED</TransactionStatus><StatusMessage>Payment received</StatusMessage></Response></AutoCreate>',
+                200,
+            ),
+        ]);
+
+        $jobSeeker = User::factory()->create(['role' => 'job_seeker', 'status' => 'suspended']);
+        $package = SubscriptionPackage::query()->create([
+            'name' => 'Starter',
+            'price' => 10000,
+            'job_chance_limit' => 2,
+            'priority_level' => 1,
+        ]);
+        $invoice = SubscriptionPayment::query()->create([
+            'user_id' => $jobSeeker->id,
+            'subscription_package_id' => $package->id,
+            'invoice_number' => 'TZINV-TEST',
+            'amount' => 10000,
+            'description' => 'Paid invoice.',
+            'type' => 'invoice',
+            'status' => 'pending',
+            'transaction_reference' => 'INV-123',
+        ]);
+
+        Sanctum::actingAs($jobSeeker);
+
+        $this->getJson('/api/invoices')
+            ->assertOk()
+            ->assertJsonPath('data.data.0.invoice_number', 'TZINV-TEST');
+
+        $this->patchJson("/api/subscriptions/payments/{$invoice->id}/refresh")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'confirmed');
     }
 }

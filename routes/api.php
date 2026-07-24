@@ -19,6 +19,8 @@ Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('reset-password', [AuthController::class, 'resetPassword']);
 Route::post('forgot-password-sms', [AuthController::class, 'forgotPasswordSms'])->middleware('throttle:5,1');
 Route::post('reset-password-sms', [AuthController::class, 'resetPasswordSms'])->middleware('throttle:5,1');
+Route::post('reactivation-code', [AuthController::class, 'sendReactivationCode'])->middleware('throttle:5,1');
+Route::post('reactivate-account', [AuthController::class, 'reactivateAccount'])->middleware('throttle:5,1');
 Route::get('public/discovery', [PublicDiscoveryController::class, 'index'])->middleware('throttle:60,1');
 Route::get('public/job-seekers/{profile}/thumbnail', [PublicDiscoveryController::class, 'thumbnail'])
     ->name('public.job-seeker-thumbnail')
@@ -33,6 +35,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('phone-verification/send', [AuthController::class, 'sendPhoneVerification'])->middleware('throttle:3,1');
     Route::post('phone-verification/verify', [AuthController::class, 'verifyPhone'])->middleware('throttle:5,1');
     Route::get('profile-file/{field}', [ProfileController::class, 'file']);
+    Route::get('invoices', [SubscriptionController::class, 'invoices']);
+    Route::post('invoices/{payment}/pay', [SubscriptionController::class, 'payInvoice']);
+    Route::patch('subscriptions/payments/{payment}/refresh', [SubscriptionController::class, 'refreshPayment']);
 
     Route::middleware('permission:view_notifications')->group(function () {
         Route::get('notifications', [NotificationController::class, 'index']);
@@ -45,9 +50,6 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('subscriptions/current', [SubscriptionController::class, 'current']);
             Route::post('subscriptions', [SubscriptionController::class, 'subscribe']);
             Route::post('subscriptions/upgrade', [SubscriptionController::class, 'upgrade']);
-            Route::patch('subscriptions/payments/{payment}/refresh', [SubscriptionController::class, 'refreshPayment']);
-            Route::get('invoices', [SubscriptionController::class, 'invoices']);
-            Route::post('invoices/{payment}/pay', [SubscriptionController::class, 'payInvoice']);
         });
         Route::middleware('permission:browse_jobs')->group(function () {
             Route::get('jobs', [JobController::class, 'index']);
@@ -85,6 +87,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('users', [AdminController::class, 'storeUser'])->middleware('permission:manage_users,create_users');
         Route::patch('users/{user}', [AdminController::class, 'updateUser'])->middleware('permission:manage_users,edit_users');
         Route::patch('users/{user}/suspend', [AdminController::class, 'suspendUser'])->middleware('permission:manage_users,suspend_users');
+        Route::patch('users/{user}/reactivate', [AdminController::class, 'reactivateUser'])->middleware('permission:manage_users,edit_users,suspend_users');
         Route::post('users/{user}/subscription', [AdminController::class, 'assignSubscription'])->middleware('permission:manage_users,edit_users');
         Route::post('users/{user}/invoices', [AdminController::class, 'createInvoice'])->middleware('permission:manage_invoices,create_invoices,manage_users');
         Route::get('invoices', [AdminController::class, 'invoices'])->middleware('permission:manage_invoices,view_invoices,manage_users');
@@ -125,6 +128,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('jobs', [JobController::class, 'adminStore'])->middleware('permission:upload_jobs');
         Route::get('jobs', [AdminController::class, 'jobs'])->middleware('permission:search_jobs,approve_jobs');
         Route::get('jobs/{job}', [AdminController::class, 'showJob'])->middleware('permission:search_jobs,approve_jobs');
+        Route::patch('jobs/{job}/toggle-listing', [AdminController::class, 'toggleJobListing'])->middleware('permission:search_jobs,approve_jobs');
         Route::patch('jobs/{job}/decision', [AdminController::class, 'decideJob'])->middleware('permission:approve_jobs');
         Route::get('files/{type}/{id}/{field}', [AdminController::class, 'file'])->middleware('permission:approve_job_seekers,approve_employers');
 

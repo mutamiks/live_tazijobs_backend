@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class JobSeekerAccountFlowTest extends TestCase
@@ -83,5 +84,42 @@ class JobSeekerAccountFlowTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.user.email', 'hr@bright.test')
             ->assertJsonPath('data.user.role', 'employer');
+    }
+
+    public function test_suspended_user_can_reactivate_account_with_sms_code(): void
+    {
+        config([
+            'sms.enabled' => true,
+            'sms.gateway_url' => 'https://sms.example.test/send',
+            'sms.username' => 'sms-user',
+            'sms.password' => 'sms-pass',
+        ]);
+        Http::fake(['sms.example.test/*' => Http::response('OK', 200)]);
+
+        $user = User::factory()->create([
+            'role' => 'job_seeker',
+            'status' => 'suspended',
+            'phone' => '+256701000333',
+        ]);
+
+        $this->postJson('/api/reactivation-code', [
+            'phone' => '0701000333',
+        ])->assertOk();
+
+        $code = \App\Models\SmsVerificationCode::query()
+            ->where('phone', '256701000333')
+            ->where('purpose', 'account_reactivation')
+            ->latest()
+            ->first();
+
+        $code->forceFill(['code_hash' => \Illuminate\Support\Facades\Hash::make('123456')])->save();
+
+        $this->postJson('/api/reactivate-account', [
+            'phone' => '0701000333',
+            'code' => '123456',
+        ])->assertOk()
+            ->assertJsonPath('message', 'Account reactivated. You can now sign in.');
+
+        $this->assertSame('approved', $user->fresh()->status);
     }
 }

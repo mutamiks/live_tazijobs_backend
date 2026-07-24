@@ -3,9 +3,12 @@
 namespace App\Services;
 
 use App\Models\JobSeekerSubscription;
+use App\Models\Notification;
 use App\Models\SubscriptionPayment;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 class SubscriptionPaymentProcessor
@@ -59,7 +62,7 @@ class SubscriptionPaymentProcessor
                 return $payment->fresh(['package', 'subscription.package']);
             }
 
-            return DB::transaction(function () use ($payment) {
+            $confirmedPayment = DB::transaction(function () use ($payment) {
                 $package = $payment->package()->lockForUpdate()->firstOrFail();
                 $activeSubscription = $payment->user
                     ->activeJobSeekerSubscription()
@@ -93,8 +96,43 @@ class SubscriptionPaymentProcessor
                     'status' => 'confirmed',
                 ]);
 
+                if ($payment->invoice_number && $payment->user?->status !== 'suspended') {
+                    $payment->user->forceFill(['status' => 'suspended'])->save();
+                }
+
                 return $payment->fresh(['package', 'subscription.package']);
             });
+
+            $this->notifyConfirmedPayment($confirmedPayment);
+
+            return $confirmedPayment;
         });
+    }
+
+    private function notifyConfirmedPayment(SubscriptionPayment $payment): void
+    {
+        $payment->loadMissing(['user', 'job', 'package']);
+        $amount = 'UGX '.number_format((float) $payment->amount);
+        $job = $payment->job?->title ? " for {$payment->job->title}" : '';
+        $invoice = $payment->invoice_number ? "Invoice {$payment->invoice_number}" : 'Your payment';
+        $message = "{$invoice}{$job} has been received and approved. Amount: {$amount}.";
+
+        Notification::query()->create([
+            'user_id' => $payment->user_id,
+            'title' => 'Payment approved',
+            'message' => $message,
+            'type' => 'payment_approved',
+        ]);
+
+        if (filled($payment->user?->phone)) {
+            try {
+                $this->sms->send($payment->user->phone, Str::limit("TaziJobs: {$message}", 159, ''));
+            } catch (RuntimeException $exception) {
+                Log::warning('Payment approval SMS failed', [
+                    'subscription_payment_id' => $payment->id,
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+        }
     }
 }

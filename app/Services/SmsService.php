@@ -111,10 +111,15 @@ class SmsService
     public function paymentStatus(string $reference): array
     {
         $this->ensureConfigured(true);
+        $method = config('sms.payment_status_method');
+        if (config('sms.payment_method') === 'acdepositfunds' && $method === 'mmstatus') {
+            $method = 'actransactioncheckstatus';
+        }
+
         $xml = '<?xml version="1.0" encoding="UTF-8"?><AutoCreate><Request>'
             .'<APIUsername>'.$this->xml(config('sms.payment_username')).'</APIUsername>'
             .'<APIPassword>'.$this->xml(config('sms.payment_password')).'</APIPassword>'
-            .'<Method>'.$this->xml(config('sms.payment_status_method')).'</Method>'
+            .'<Method>'.$this->xml($method).'</Method>'
             .'<TransactionReference>'.$this->xml($reference).'</TransactionReference>'
             .'</Request></AutoCreate>';
 
