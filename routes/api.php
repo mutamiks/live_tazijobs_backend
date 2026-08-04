@@ -22,6 +22,7 @@ Route::post('reset-password-sms', [AuthController::class, 'resetPasswordSms'])->
 Route::post('reactivation-code', [AuthController::class, 'sendReactivationCode'])->middleware('throttle:5,1');
 Route::post('reactivate-account', [AuthController::class, 'reactivateAccount'])->middleware('throttle:5,1');
 Route::get('public/discovery', [PublicDiscoveryController::class, 'index'])->middleware('throttle:60,1');
+Route::post('public/worker-contacts', [PublicDiscoveryController::class, 'storeWorkerContact'])->middleware('throttle:10,1');
 Route::get('public/job-seekers/{profile}/thumbnail', [PublicDiscoveryController::class, 'thumbnail'])
     ->name('public.job-seeker-thumbnail')
     ->middleware('throttle:120,1');

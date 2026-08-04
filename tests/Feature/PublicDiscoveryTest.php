@@ -106,4 +106,37 @@ class PublicDiscoveryTest extends TestCase
             ->assertJsonCount(1, 'data.job_seekers')
             ->assertJsonPath('data.job_seekers.0.display_name', 'V. W.');
     }
+
+    public function test_visitor_can_book_worker_for_admin_follow_up(): void
+    {
+        $worker = User::factory()->create(['role' => 'job_seeker', 'status' => 'approved']);
+        $profile = JobSeekerProfile::query()->create([
+            'user_id' => $worker->id,
+            'full_name' => 'Public Worker',
+            'job_title' => 'Housekeeper',
+            'district' => 'Kampala',
+            'status' => 'approved',
+            'is_available' => true,
+        ]);
+
+        $this->postJson('/api/public/worker-contacts', [
+            'job_seeker_profile_id' => $profile->id,
+            'contact_name' => 'Sarah Mukasa',
+            'business_name' => 'Mukasa Homes',
+            'contact_phone' => '0772123456',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.contact_name', 'Sarah Mukasa')
+            ->assertJsonPath('data.business_name', 'Mukasa Homes')
+            ->assertJsonPath('data.status', 'pending');
+
+        $this->assertDatabaseHas('worker_orders', [
+            'job_seeker_profile_id' => $profile->id,
+            'employer_id' => null,
+            'contact_name' => 'Sarah Mukasa',
+            'business_name' => 'Mukasa Homes',
+            'contact_phone' => '0772123456',
+            'status' => 'pending',
+        ]);
+    }
 }

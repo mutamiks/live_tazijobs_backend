@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Job;
 use App\Models\JobSeekerProfile;
+use App\Models\WorkerOrder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -14,12 +15,14 @@ class PublicDiscoveryController extends Controller
     {
         $data = $request->validate([
             'search' => ['nullable', 'string', 'max:80'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:24'],
         ]);
         $search = trim($data['search'] ?? '');
+        $limit = (int) ($data['limit'] ?? 6);
 
         $payload = [
-            'jobs' => $this->jobs($search),
-            'job_seekers' => $this->jobSeekers($search),
+            'jobs' => $this->jobs($search, $limit),
+            'job_seekers' => $this->jobSeekers($search, $limit),
         ];
 
         return response()
@@ -43,7 +46,36 @@ class PublicDiscoveryController extends Controller
         );
     }
 
-    private function jobs(string $search)
+    public function storeWorkerContact(Request $request)
+    {
+        $data = $request->validate([
+            'job_seeker_profile_id' => ['required', 'exists:job_seeker_profiles,id'],
+            'contact_name' => ['required', 'string', 'max:255'],
+            'business_name' => ['nullable', 'string', 'max:255'],
+            'contact_phone' => ['required', 'string', 'max:50'],
+        ]);
+
+        $worker = JobSeekerProfile::query()
+            ->publiclyVisible()
+            ->findOrFail($data['job_seeker_profile_id']);
+
+        $order = WorkerOrder::query()->create([
+            'job_seeker_profile_id' => $worker->id,
+            'contact_name' => $data['contact_name'],
+            'business_name' => $data['business_name'] ?? null,
+            'contact_phone' => $data['contact_phone'],
+            'salary_offered' => 0,
+            'job_location' => 'Not provided',
+            'working_terms' => 'Public website booking request. Admin should contact this person for full details.',
+            'job_description' => 'Public booking request from '.$data['contact_name'].($data['business_name'] ? ' at '.$data['business_name'] : '').'.',
+            'start_date' => today(),
+            'status' => 'pending',
+        ]);
+
+        return response()->json(['message' => 'Booking request submitted. TaziJobs will contact you.', 'data' => $order], 201);
+    }
+
+    private function jobs(string $search, int $limit)
     {
         return Job::query()
             ->select([
@@ -62,11 +94,11 @@ class PublicDiscoveryController extends Controller
                 });
             })
             ->latest()
-            ->limit(6)
+            ->limit($limit)
             ->get();
     }
 
-    private function jobSeekers(string $search)
+    private function jobSeekers(string $search, int $limit)
     {
         return JobSeekerProfile::query()
             ->select([
@@ -83,7 +115,7 @@ class PublicDiscoveryController extends Controller
                 });
             })
             ->latest()
-            ->limit(6)
+            ->limit($limit)
             ->get()
             ->map(fn (JobSeekerProfile $profile) => [
                 'id' => $profile->id,

@@ -19,6 +19,7 @@ use App\Support\NotifiesUsers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use App\Services\SmsService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
@@ -154,6 +155,16 @@ class AdminController extends Controller
         if (filled($request->input('phone'))) {
             $request->merge(['phone' => '+'.app(SmsService::class)->normalizePhone($request->input('phone'))]);
         }
+        if (filled($request->input('profile.phone'))) {
+            $profile = $request->input('profile', []);
+            $profile['phone'] = '+'.app(SmsService::class)->normalizePhone($profile['phone']);
+            $request->merge(['profile' => $profile]);
+        }
+        if (filled($request->input('profile.company_phone'))) {
+            $profile = $request->input('profile', []);
+            $profile['company_phone'] = '+'.app(SmsService::class)->normalizePhone($profile['company_phone']);
+            $request->merge(['profile' => $profile]);
+        }
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -161,7 +172,50 @@ class AdminController extends Controller
             'phone' => ['required', 'regex:/^(?:\+256|256|0)?7\d{8}$/', 'unique:users,phone'],
             'role' => ['required', 'in:admin,job_seeker,employer'],
             'admin_role_id' => ['nullable', 'exists:admin_roles,id'],
+            'status' => ['nullable', 'in:pending,approved,rejected,suspended'],
             'password' => ['required', 'confirmed', Password::min(8)],
+            'profile' => ['nullable', 'array'],
+            'profile.full_name' => ['required_if:role,job_seeker', 'nullable', 'string', 'max:255'],
+            'profile.job_title' => ['nullable', 'string', 'max:150'],
+            'profile.gender' => ['nullable', Rule::in(['male', 'female'])],
+            'profile.date_of_birth' => ['nullable', 'date', 'before_or_equal:'.now()->subYears(15)->toDateString()],
+            'profile.location' => ['nullable', 'string', 'max:255'],
+            'profile.phone' => ['nullable', 'regex:/^(?:\+256|256|0)?7\d{8}$/'],
+            'profile.district' => ['required_if:role,job_seeker,employer', 'nullable', 'string', 'max:255'],
+            'profile.county' => ['required_if:role,job_seeker,employer', 'nullable', 'string', 'max:255'],
+            'profile.subcounty' => ['required_if:role,job_seeker,employer', 'nullable', 'string', 'max:255'],
+            'profile.parish' => ['required_if:role,job_seeker,employer', 'nullable', 'string', 'max:255'],
+            'profile.village' => ['required_if:role,job_seeker,employer', 'nullable', 'string', 'max:255'],
+            'profile.languages' => ['required_if:role,job_seeker', 'nullable', 'array'],
+            'profile.languages.*' => ['string', 'max:100'],
+            'profile.religion' => ['required_if:role,job_seeker', 'nullable', 'string', 'max:100'],
+            'profile.education_level' => ['nullable', Rule::in(self::EDUCATION_LEVELS)],
+            'profile.skills' => ['nullable', 'array'],
+            'profile.skills.*' => ['string', 'max:100'],
+            'profile.experience_years' => ['nullable', 'integer', 'min:0', 'max:80'],
+            'profile.bio' => ['nullable', 'string'],
+            'profile.work_experience' => ['nullable', 'string'],
+            'profile.preferred_job_categories' => ['nullable', 'array'],
+            'profile.preferred_job_categories.*' => ['string', 'max:100'],
+            'profile.is_available' => ['nullable', 'boolean'],
+            'profile.cv_file' => ['nullable', 'file', 'mimes:pdf,doc,docx', 'max:10240'],
+            'profile.lc1_letter_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
+            'profile.id_document_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
+            'profile.id_document_front_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+            'profile.id_document_back_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+            'profile.profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+            'profile.terms_accepted' => ['nullable', 'boolean'],
+            'profile.employer_type' => ['nullable', Rule::in(['company', 'individual'])],
+            'profile.company_name' => ['required_if:role,employer', 'nullable', 'string', 'max:255'],
+            'profile.company_email' => ['nullable', 'email', 'max:255'],
+            'profile.company_phone' => ['nullable', 'regex:/^(?:\+256|256|0)?7\d{8}$/'],
+            'profile.company_location' => ['nullable', 'string', 'max:255'],
+            'profile.company_registration_number' => ['nullable', 'string', 'max:255'],
+            'profile.company_description' => ['nullable', 'string'],
+            'profile.preferred_worker_type' => ['nullable', 'string', 'max:255'],
+            'profile.company_logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+            'profile.business_document_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
+            'profile.website' => ['nullable', 'url', 'max:255'],
         ]);
 
         if (filled($data['phone'] ?? null)) {
@@ -172,7 +226,16 @@ class AdminController extends Controller
             $data['admin_role_id'] = null;
         }
 
-        $user = User::query()->create($data + ['status' => 'approved']);
+        $profileData = $data['profile'] ?? [];
+        unset($data['profile']);
+
+        $user = DB::transaction(function () use ($data, $profileData, $request) {
+            $status = $data['status'] ?? 'approved';
+            $user = User::query()->create($data + ['status' => $status]);
+            $this->createManagedProfile($user, $profileData, $status, $request);
+
+            return $user->fresh(['adminRole', 'jobSeekerProfile', 'employerProfile']);
+        });
 
         
         $this->notifyUser(
@@ -183,6 +246,109 @@ class AdminController extends Controller
         );
 
         return response()->json(['message' => 'User account created.', 'data' => $user->load('adminRole')], 201);
+    }
+
+    private function createManagedProfile(User $user, array $profileData, string $status, Request $request): void
+    {
+        if ($profileData === [] || $user->role === 'admin') {
+            return;
+        }
+
+        $profileData = array_filter($profileData, fn ($value) => ! is_null($value));
+        $profileData['status'] = $status;
+        $profileData['rejection_reason'] = null;
+        $profileData['approved_by'] = $status === 'approved' ? $request->user()->id : null;
+        $profileData['approved_at'] = $status === 'approved' ? now() : null;
+
+        if ($user->role === 'job_seeker') {
+            $fileFields = [
+                'cv_file' => 'job-seeker-cvs',
+                'lc1_letter_file' => 'lc1-letters',
+                'id_document_file' => 'id-documents',
+                'id_document_front_file' => 'id-documents',
+                'id_document_back_file' => 'id-documents',
+                'profile_photo' => 'profile-photos',
+            ];
+            foreach ($fileFields as $field => $folder) {
+                if ($file = $request->file("profile.{$field}")) {
+                    $profileData[$field] = $file->store($folder, 'public');
+                }
+            }
+
+            $allowed = [
+                'full_name',
+                'job_title',
+                'gender',
+                'date_of_birth',
+                'location',
+                'phone',
+                'district',
+                'county',
+                'subcounty',
+                'parish',
+                'village',
+                'languages',
+                'religion',
+                'education_level',
+                'skills',
+                'experience_years',
+                'bio',
+                'work_experience',
+                'preferred_job_categories',
+                'cv_file',
+                'lc1_letter_file',
+                'id_document_file',
+                'id_document_front_file',
+                'id_document_back_file',
+                'profile_photo',
+                'terms_accepted',
+                'is_available',
+                'status',
+                'rejection_reason',
+                'approved_by',
+                'approved_at',
+            ];
+
+            $user->jobSeekerProfile()->create(
+                collect($profileData)->only($allowed)->toArray() + ['full_name' => $user->name]
+            );
+        }
+
+        if ($user->role === 'employer') {
+            foreach (['company_logo' => 'company-logos', 'business_document_file' => 'business-documents'] as $field => $folder) {
+                if ($file = $request->file("profile.{$field}")) {
+                    $profileData[$field] = $file->store($folder, 'public');
+                }
+            }
+
+            $allowed = [
+                'employer_type',
+                'company_name',
+                'company_email',
+                'company_phone',
+                'company_location',
+                'district',
+                'county',
+                'subcounty',
+                'parish',
+                'village',
+                'company_registration_number',
+                'company_description',
+                'preferred_worker_type',
+                'preferred_job_categories',
+                'company_logo',
+                'business_document_file',
+                'website',
+                'status',
+                'rejection_reason',
+                'approved_by',
+                'approved_at',
+            ];
+
+            $user->employerProfile()->create(
+                collect($profileData)->only($allowed)->toArray() + ['company_name' => $user->name]
+            );
+        }
     }
 
     public function updateUser(Request $request, User $user)
@@ -226,6 +392,13 @@ class AdminController extends Controller
             'profile.preferred_job_categories' => ['nullable', 'array'],
             'profile.preferred_job_categories.*' => ['string', 'max:100'],
             'profile.is_available' => ['nullable', 'boolean'],
+            'profile.terms_accepted' => ['nullable', 'boolean'],
+            'profile.cv_file' => ['nullable', 'file', 'mimes:pdf,doc,docx', 'max:10240'],
+            'profile.lc1_letter_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
+            'profile.id_document_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
+            'profile.id_document_front_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+            'profile.id_document_back_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+            'profile.profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
             'profile.employer_type' => ['nullable', Rule::in(['company', 'individual'])],
             'profile.company_name' => ['nullable', 'string', 'max:255'],
             'profile.company_email' => ['nullable', 'email', 'max:255'],
@@ -234,6 +407,8 @@ class AdminController extends Controller
             'profile.company_registration_number' => ['nullable', 'string', 'max:255'],
             'profile.company_description' => ['nullable', 'string'],
             'profile.preferred_worker_type' => ['nullable', 'string', 'max:255'],
+            'profile.company_logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+            'profile.business_document_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
             'profile.website' => ['nullable', 'url', 'max:255'],
         ]);
 
@@ -265,12 +440,12 @@ class AdminController extends Controller
 
         $user->update($data);
 
-        $this->updateEditableProfile($user->fresh(), $profileData, $data['status']);
+        $this->updateEditableProfile($user->fresh(), $profileData, $data['status'], $request);
 
         return response()->json(['message' => 'User account updated.', 'data' => $user->fresh()->load(['adminRole', 'jobSeekerProfile', 'employerProfile'])]);
     }
 
-    private function updateEditableProfile(User $user, array $profileData, string $status): void
+    private function updateEditableProfile(User $user, array $profileData, string $status, Request $request): void
     {
         if ($profileData === [] || $user->role === 'admin') {
             return;
@@ -283,19 +458,47 @@ class AdminController extends Controller
             if (filled($profileData['phone'] ?? null)) {
                 $profileData['phone'] = '+'.app(SmsService::class)->normalizePhone($profileData['phone']);
             }
+            foreach ([
+                'cv_file' => 'job-seeker-cvs',
+                'lc1_letter_file' => 'lc1-letters',
+                'id_document_file' => 'id-documents',
+                'id_document_front_file' => 'id-documents',
+                'id_document_back_file' => 'id-documents',
+                'profile_photo' => 'profile-photos',
+            ] as $field => $folder) {
+                if ($file = $request->file("profile.{$field}")) {
+                    $profileData[$field] = $file->store($folder, 'public');
+                }
+            }
 
             $allowed = [
                 'full_name',
                 'job_title',
+                'gender',
+                'date_of_birth',
+                'location',
                 'phone',
                 'district',
                 'county',
                 'subcounty',
                 'parish',
                 'village',
+                'languages',
+                'religion',
                 'education_level',
+                'skills',
                 'experience_years',
                 'bio',
+                'work_experience',
+                'preferred_job_categories',
+                'cv_file',
+                'lc1_letter_file',
+                'id_document_file',
+                'id_document_front_file',
+                'id_document_back_file',
+                'profile_photo',
+                'terms_accepted',
+                'is_available',
                 'status',
             ];
 
@@ -308,6 +511,14 @@ class AdminController extends Controller
         if ($user->role === 'employer') {
             if (filled($profileData['company_phone'] ?? null)) {
                 $profileData['company_phone'] = '+'.app(SmsService::class)->normalizePhone($profileData['company_phone']);
+            }
+            foreach ([
+                'company_logo' => 'company-logos',
+                'business_document_file' => 'business-documents',
+            ] as $field => $folder) {
+                if ($file = $request->file("profile.{$field}")) {
+                    $profileData[$field] = $file->store($folder, 'public');
+                }
             }
 
             $allowed = [
@@ -322,6 +533,11 @@ class AdminController extends Controller
                 'parish',
                 'village',
                 'company_registration_number',
+                'company_description',
+                'preferred_worker_type',
+                'preferred_job_categories',
+                'company_logo',
+                'business_document_file',
                 'website',
                 'status',
             ];
@@ -371,7 +587,7 @@ class AdminController extends Controller
 
             'manage_users' => 'Manage users',
             'view_users' => 'View users',
-            'create_users' => 'Create staff users',
+            'create_users' => 'Create users',
             'edit_users' => 'Edit users',
             'suspend_users' => 'Suspend users',
 
@@ -726,6 +942,9 @@ class AdminController extends Controller
                 $query->where(function ($query) use ($search) {
                     $query->where('job_description', 'like', "%{$search}%")
                         ->orWhere('job_location', 'like', "%{$search}%")
+                        ->orWhere('contact_name', 'like', "%{$search}%")
+                        ->orWhere('business_name', 'like', "%{$search}%")
+                        ->orWhere('contact_phone', 'like', "%{$search}%")
                         ->orWhereHas('worker', fn ($query) => $query->where('full_name', 'like', "%{$search}%"))
                         ->orWhereHas('employer', fn ($query) => $query->where('name', 'like', "%{$search}%"));
                 });
@@ -760,12 +979,14 @@ class AdminController extends Controller
         ])->save();
 
         
-        $this->notifyUser(
-            $order->employer,
-            'worker_order',
-            "Worker request {$data['status']}",
-            $approved ? 'Your worker request has been approved.' : "Your worker request was rejected: {$order->rejection_reason}"
-        );
+        if ($order->employer) {
+            $this->notifyUser(
+                $order->employer,
+                'worker_order',
+                "Worker request {$data['status']}",
+                $approved ? 'Your worker request has been approved.' : "Your worker request was rejected: {$order->rejection_reason}"
+            );
+        }
 
         
         $this->notifyUser(

@@ -10,6 +10,9 @@ class WorkerOrder extends Model
     protected $fillable = [
         'employer_id',
         'job_seeker_profile_id',
+        'contact_name',
+        'business_name',
+        'contact_phone',
         'salary_offered',
         'job_location',
         'working_terms',

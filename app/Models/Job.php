@@ -27,6 +27,7 @@ class Job extends Model
         'job_type',
         'salary_min',
         'salary_max',
+        'allowances',
         'deadline',
         'status',
         'rejection_reason',
@@ -40,6 +41,7 @@ class Job extends Model
         return [
             'salary_min' => 'decimal:2',
             'salary_max' => 'decimal:2',
+            'allowances' => 'array',
             'deadline' => 'date',
             'approved_at' => 'datetime',
             'is_listed' => 'boolean',

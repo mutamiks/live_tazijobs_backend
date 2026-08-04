@@ -4,11 +4,16 @@ namespace Tests\Feature;
 
 use App\Models\AdminRole;
 use App\Models\EmployerProfile;
+use App\Models\JobCategory;
 use App\Models\JobSeekerProfile;
 use App\Models\JobSeekerSubscription;
+use App\Models\Language;
+use App\Models\Religion;
 use App\Models\SubscriptionPackage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -158,6 +163,10 @@ class AdminUserUpdateTest extends TestCase
                 'phone' => '0772000111',
                 'education_level' => 'Secondary O Level',
                 'district' => 'Kampala',
+                'county' => 'Kampala Central Division',
+                'subcounty' => 'Central',
+                'parish' => 'Nakasero',
+                'village' => 'Nakasero I',
                 'experience_years' => 4,
             ],
         ])->assertOk()
@@ -173,6 +182,10 @@ class AdminUserUpdateTest extends TestCase
             'phone' => '+256772000111',
             'education_level' => 'Secondary O Level',
             'district' => 'Kampala',
+            'county' => 'Kampala Central Division',
+            'subcounty' => 'Central',
+            'parish' => 'Nakasero',
+            'village' => 'Nakasero I',
             'status' => 'approved',
         ]);
     }
@@ -235,6 +248,11 @@ class AdminUserUpdateTest extends TestCase
                 'company_email' => 'hello@bright.test',
                 'company_phone' => '0772000111',
                 'company_location' => 'Kampala',
+                'district' => 'Kampala',
+                'county' => 'Kampala Central Division',
+                'subcounty' => 'Central',
+                'parish' => 'Nakasero',
+                'village' => 'Nakasero I',
             ],
         ])->assertOk()
             ->assertJsonPath('data.employer_profile.company_name', 'Bright Works HR')
@@ -246,9 +264,141 @@ class AdminUserUpdateTest extends TestCase
             'company_name' => 'Bright Works HR',
             'company_phone' => '+256772000111',
             'company_location' => 'Kampala',
+            'district' => 'Kampala',
+            'county' => 'Kampala Central Division',
+            'subcounty' => 'Central',
+            'parish' => 'Nakasero',
+            'village' => 'Nakasero I',
             'status' => 'approved',
         ]);
     }
+
+    public function test_admin_can_update_full_job_seeker_profile_and_files_with_user(): void
+    {
+        Storage::fake('public');
+        $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
+        $user = User::factory()->create([
+            'name' => 'Full Worker',
+            'email' => 'full-worker@example.test',
+            'phone' => '+256701111111',
+            'role' => 'job_seeker',
+            'status' => 'pending',
+        ]);
+        JobSeekerProfile::query()->create([
+            'user_id' => $user->id,
+            'full_name' => 'Full Worker',
+            'status' => 'pending',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->post("/api/admin/users/{$user->id}", [
+            '_method' => 'PATCH',
+            'name' => 'Full Worker Updated',
+            'email' => 'full-worker@example.test',
+            'phone' => '0772123456',
+            'role' => 'job_seeker',
+            'status' => 'approved',
+            'admin_role_id' => '',
+            'profile' => [
+                'full_name' => 'Full Worker Profile',
+                'job_title' => 'Cleaner',
+                'gender' => 'female',
+                'date_of_birth' => now()->subYears(28)->toDateString(),
+                'location' => 'Kampala',
+                'phone' => '0772000111',
+                'district' => 'Kampala',
+                'county' => 'Kampala Central',
+                'subcounty' => 'Central',
+                'parish' => 'Nakasero',
+                'village' => 'Nakasero I',
+                'languages' => ['English', 'Luganda'],
+                'religion' => 'Christian',
+                'education_level' => 'Secondary O Level',
+                'skills' => ['Cleaning', 'Cooking'],
+                'experience_years' => 5,
+                'bio' => 'Ready for verified opportunities.',
+                'work_experience' => 'Five years of home support.',
+                'preferred_job_categories' => ['Domestic work'],
+                'is_available' => '1',
+                'terms_accepted' => '1',
+                'profile_photo' => UploadedFile::fake()->image('photo.jpg'),
+                'cv_file' => UploadedFile::fake()->create('cv.pdf', 50, 'application/pdf'),
+            ],
+        ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('data.job_seeker_profile.full_name', 'Full Worker Profile')
+            ->assertJsonPath('data.job_seeker_profile.languages.0', 'English');
+
+        $profile = $user->fresh()->jobSeekerProfile()->firstOrFail();
+        $this->assertSame(['English', 'Luganda'], $profile->languages);
+        $this->assertSame(['Cleaning', 'Cooking'], $profile->skills);
+        $this->assertSame(['Domestic work'], $profile->preferred_job_categories);
+        $this->assertTrue($profile->is_available);
+        $this->assertTrue($profile->terms_accepted);
+        Storage::disk('public')->assertExists($profile->profile_photo);
+        Storage::disk('public')->assertExists($profile->cv_file);
+    }
+
+    public function test_admin_can_update_full_employer_profile_and_files_with_user(): void
+    {
+        Storage::fake('public');
+        $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
+        $user = User::factory()->create([
+            'name' => 'Full Employer',
+            'email' => 'full-employer@example.test',
+            'phone' => '+256701111111',
+            'role' => 'employer',
+            'status' => 'pending',
+        ]);
+        EmployerProfile::query()->create([
+            'user_id' => $user->id,
+            'company_name' => 'Full Employer',
+            'status' => 'pending',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->post("/api/admin/users/{$user->id}", [
+            '_method' => 'PATCH',
+            'name' => 'Full Employer',
+            'email' => 'full-employer@example.test',
+            'phone' => '0772123456',
+            'role' => 'employer',
+            'status' => 'approved',
+            'admin_role_id' => '',
+            'profile' => [
+                'employer_type' => 'company',
+                'company_name' => 'Full Employer Ltd',
+                'company_email' => 'jobs@full-employer.test',
+                'company_phone' => '0772000111',
+                'company_location' => 'Kampala',
+                'district' => 'Kampala',
+                'county' => 'Kampala Central',
+                'subcounty' => 'Central',
+                'parish' => 'Nakasero',
+                'village' => 'Nakasero I',
+                'company_registration_number' => 'FE-2026',
+                'company_description' => 'Hiring support staff.',
+                'preferred_worker_type' => 'Support staff',
+                'preferred_job_categories' => ['Customer support'],
+                'website' => 'https://full-employer.test',
+                'company_logo' => UploadedFile::fake()->image('logo.jpg'),
+                'business_document_file' => UploadedFile::fake()->create('business.pdf', 50, 'application/pdf'),
+            ],
+        ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('data.employer_profile.company_name', 'Full Employer Ltd')
+            ->assertJsonPath('data.employer_profile.preferred_job_categories.0', 'Customer support');
+
+        $profile = $user->fresh()->employerProfile()->firstOrFail();
+        $this->assertSame('Hiring support staff.', $profile->company_description);
+        $this->assertSame('Support staff', $profile->preferred_worker_type);
+        $this->assertSame(['Customer support'], $profile->preferred_job_categories);
+        Storage::disk('public')->assertExists($profile->company_logo);
+        Storage::disk('public')->assertExists($profile->business_document_file);
+    }
+
     public function test_admin_can_update_an_active_job_seeker_subscription_package(): void
     {
         $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
@@ -282,5 +432,130 @@ class AdminUserUpdateTest extends TestCase
             'subscription_package_id' => $professional->id,
             'job_chance_limit' => 6,
         ]);
+    }
+
+    public function test_admin_can_create_job_seeker_with_full_profile_information(): void
+    {
+        Storage::fake('public');
+        Language::query()->create(['name' => 'English', 'is_active' => true]);
+        Language::query()->create(['name' => 'Luganda', 'is_active' => true]);
+        Religion::query()->create(['name' => 'Christian', 'is_active' => true]);
+        JobCategory::query()->create(['name' => 'Domestic work', 'is_active' => true]);
+        $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
+
+        Sanctum::actingAs($admin);
+
+        $this->post('/api/admin/users', [
+            'name' => 'Jane Worker',
+            'email' => 'jane.worker@example.test',
+            'phone' => '0772123456',
+            'role' => 'job_seeker',
+            'status' => 'approved',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'profile' => [
+                'full_name' => 'Jane Worker Profile',
+                'job_title' => 'Housekeeper',
+                'gender' => 'female',
+                'date_of_birth' => now()->subYears(25)->toDateString(),
+                'location' => 'Kampala',
+                'phone' => '0772000111',
+                'district' => 'Kampala',
+                'county' => 'Kampala Central',
+                'subcounty' => 'Central',
+                'parish' => 'Nakasero',
+                'village' => 'Nakasero I',
+                'languages' => ['English', 'Luganda'],
+                'religion' => 'Christian',
+                'education_level' => 'Secondary O Level',
+                'skills' => ['Cleaning', 'Cooking'],
+                'experience_years' => 3,
+                'bio' => 'Reliable domestic worker.',
+                'work_experience' => 'Three years supporting families.',
+                'preferred_job_categories' => ['Domestic work'],
+                'is_available' => '1',
+                'terms_accepted' => '1',
+                'profile_photo' => UploadedFile::fake()->image('photo.jpg'),
+                'id_document_front_file' => UploadedFile::fake()->image('front.jpg'),
+                'id_document_back_file' => UploadedFile::fake()->image('back.jpg'),
+                'id_document_file' => UploadedFile::fake()->create('id.pdf', 50, 'application/pdf'),
+                'cv_file' => UploadedFile::fake()->create('cv.pdf', 50, 'application/pdf'),
+                'lc1_letter_file' => UploadedFile::fake()->create('lc1.pdf', 50, 'application/pdf'),
+            ],
+        ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('data.role', 'job_seeker')
+            ->assertJsonPath('data.status', 'approved');
+
+        $user = User::query()->where('email', 'jane.worker@example.test')->firstOrFail();
+        $profile = $user->jobSeekerProfile()->firstOrFail();
+
+        $this->assertSame('+256772123456', $user->phone);
+        $this->assertSame('Jane Worker Profile', $profile->full_name);
+        $this->assertSame('+256772000111', $profile->phone);
+        $this->assertSame(['English', 'Luganda'], $profile->languages);
+        $this->assertSame(['Cleaning', 'Cooking'], $profile->skills);
+        $this->assertSame(['Domestic work'], $profile->preferred_job_categories);
+        $this->assertTrue($profile->is_available);
+        $this->assertTrue($profile->terms_accepted);
+        $this->assertNotNull($profile->profile_photo);
+        $this->assertNotNull($profile->id_document_front_file);
+        $this->assertNotNull($profile->id_document_back_file);
+        Storage::disk('public')->assertExists($profile->profile_photo);
+        Storage::disk('public')->assertExists($profile->cv_file);
+    }
+
+    public function test_admin_can_create_employer_with_full_profile_information(): void
+    {
+        Storage::fake('public');
+        JobCategory::query()->create(['name' => 'Customer support', 'is_active' => true]);
+        $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
+
+        Sanctum::actingAs($admin);
+
+        $this->post('/api/admin/users', [
+            'name' => 'Acme Hiring',
+            'email' => 'hr@acme.example.test',
+            'phone' => '0772123456',
+            'role' => 'employer',
+            'status' => 'approved',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'profile' => [
+                'employer_type' => 'company',
+                'company_name' => 'Acme Services Ltd',
+                'company_email' => 'jobs@acme.example.test',
+                'company_phone' => '0772000111',
+                'company_location' => 'Kampala',
+                'district' => 'Kampala',
+                'county' => 'Kampala Central',
+                'subcounty' => 'Central',
+                'parish' => 'Nakasero',
+                'village' => 'Nakasero I',
+                'company_registration_number' => 'ACME-2026',
+                'company_description' => 'Hiring verified workers.',
+                'preferred_worker_type' => 'Customer support agents',
+                'preferred_job_categories' => ['Customer support'],
+                'website' => 'https://acme.example.test',
+                'company_logo' => UploadedFile::fake()->image('logo.jpg'),
+                'business_document_file' => UploadedFile::fake()->create('business.pdf', 50, 'application/pdf'),
+            ],
+        ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('data.role', 'employer')
+            ->assertJsonPath('data.status', 'approved');
+
+        $user = User::query()->where('email', 'hr@acme.example.test')->firstOrFail();
+        $profile = $user->employerProfile()->firstOrFail();
+
+        $this->assertSame('+256772123456', $user->phone);
+        $this->assertSame('Acme Services Ltd', $profile->company_name);
+        $this->assertSame('+256772000111', $profile->company_phone);
+        $this->assertSame(['Customer support'], $profile->preferred_job_categories);
+        $this->assertSame('https://acme.example.test', $profile->website);
+        $this->assertNotNull($profile->company_logo);
+        $this->assertNotNull($profile->business_document_file);
+        Storage::disk('public')->assertExists($profile->company_logo);
+        Storage::disk('public')->assertExists($profile->business_document_file);
     }
 }

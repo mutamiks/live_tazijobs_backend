@@ -7,6 +7,18 @@ use Illuminate\Validation\Rule;
 
 class StoreJobRequest extends FormRequest
 {
+    private const ALLOWANCE_TYPES = [
+        'lunch',
+        'supper',
+        'transport',
+        'housing',
+        'airtime',
+        'data',
+        'medical',
+        'bonus',
+        'other',
+    ];
+
     public function rules(): array
     {
         return [
@@ -26,6 +38,11 @@ class StoreJobRequest extends FormRequest
             'job_type' => ['required', Rule::in(['full_time', 'part_time', 'contract', 'internship', 'remote'])],
             'salary_min' => ['nullable', 'numeric', 'min:0'],
             'salary_max' => ['nullable', 'numeric', 'min:0', 'gte:salary_min'],
+            'allowances' => ['nullable', 'array'],
+            'allowances.prefer_not_to_say' => ['nullable', 'boolean'],
+            'allowances.items' => ['nullable', 'array'],
+            'allowances.items.*.type' => ['required_with:allowances.items', Rule::in(self::ALLOWANCE_TYPES)],
+            'allowances.items.*.amount' => ['nullable', 'numeric', 'min:0'],
             'deadline' => ['nullable', 'date', 'after_or_equal:today'],
         ];
     }

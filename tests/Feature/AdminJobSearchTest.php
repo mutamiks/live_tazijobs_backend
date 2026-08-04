@@ -91,4 +91,32 @@ class AdminJobSearchTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.is_listed', true);
     }
+
+    public function test_admin_can_upload_job_with_allowances_prefer_not_to_say(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $employer = User::factory()->create(['role' => 'employer', 'status' => 'approved']);
+        $category = JobCategory::query()->create(['name' => 'Customer support']);
+        EmployerProfile::query()->create([
+            'user_id' => $employer->id,
+            'company_name' => 'Bright Works Ltd',
+            'status' => 'approved',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/admin/jobs', [
+            'employer_id' => $employer->id,
+            'job_category_id' => $category->id,
+            'title' => 'Support Agent',
+            'description' => 'Help customers.',
+            'job_type' => 'full_time',
+            'allowances' => [
+                'prefer_not_to_say' => true,
+                'items' => [],
+            ],
+        ])->assertCreated()
+            ->assertJsonPath('data.allowances.prefer_not_to_say', true)
+            ->assertJsonPath('data.status', 'approved');
+    }
 }

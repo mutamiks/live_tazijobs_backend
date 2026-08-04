@@ -141,7 +141,7 @@ class TaziJobAppWorkflowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.data.0.title', 'Junior Developer');
     }
-    public function test_employer_can_edit_own_job_and_set_number_of_positions(): void
+    public function test_employer_can_edit_own_job_and_set_number_of_positions_and_allowances(): void
     {
         $employer = User::factory()->create(['role' => 'employer']);
         EmployerProfile::query()->create(['user_id' => $employer->id, 'company_name' => 'Bright Works', 'status' => 'approved']);
@@ -163,9 +163,17 @@ class TaziJobAppWorkflowTest extends TestCase
             'positions' => 3,
             'description' => 'Clean offices and common areas.',
             'job_type' => 'full_time',
+            'allowances' => [
+                'prefer_not_to_say' => false,
+                'items' => [
+                    ['type' => 'lunch', 'amount' => 5000],
+                    ['type' => 'transport', 'amount' => null],
+                ],
+            ],
         ])->assertOk()
             ->assertJsonPath('data.title', 'Office Cleaner')
             ->assertJsonPath('data.positions', 3)
+            ->assertJsonPath('data.allowances.items.0.type', 'lunch')
             ->assertJsonPath('data.status', 'pending');
 
         $this->assertDatabaseHas('jobs', [
@@ -174,5 +182,7 @@ class TaziJobAppWorkflowTest extends TestCase
             'status' => 'pending',
             'approved_by' => null,
         ]);
+
+        $this->assertSame('lunch', $job->fresh()->allowances['items'][0]['type']);
     }
 }
