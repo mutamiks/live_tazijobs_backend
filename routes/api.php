@@ -129,6 +129,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('jobs', [JobController::class, 'adminStore'])->middleware('permission:upload_jobs');
         Route::get('jobs', [AdminController::class, 'jobs'])->middleware('permission:search_jobs,approve_jobs');
         Route::get('jobs/{job}', [AdminController::class, 'showJob'])->middleware('permission:search_jobs,approve_jobs');
+        Route::patch('jobs/{job}', [JobController::class, 'adminUpdate'])->middleware('permission:upload_jobs,search_jobs,approve_jobs');
         Route::patch('jobs/{job}/toggle-listing', [AdminController::class, 'toggleJobListing'])->middleware('permission:search_jobs,approve_jobs');
         Route::patch('jobs/{job}/decision', [AdminController::class, 'decideJob'])->middleware('permission:approve_jobs');
         Route::get('files/{type}/{id}/{field}', [AdminController::class, 'file'])->middleware('permission:approve_job_seekers,approve_employers');

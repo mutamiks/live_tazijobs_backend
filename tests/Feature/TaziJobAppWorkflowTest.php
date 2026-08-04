@@ -26,6 +26,11 @@ class TaziJobAppWorkflowTest extends TestCase
         $this->postJson('/api/employer/profile', [
             'company_name' => 'Bright Works',
             'company_email' => 'hr@bright.test',
+            'district' => 'Kampala',
+            'county' => 'Kampala Central Division',
+            'subcounty' => 'Central',
+            'parish' => 'Nakasero',
+            'village' => 'Nakasero I',
         ])->assertCreated();
 
         $this->postJson('/api/employer/jobs', [

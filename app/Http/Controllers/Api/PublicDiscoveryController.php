@@ -15,7 +15,7 @@ class PublicDiscoveryController extends Controller
     {
         $data = $request->validate([
             'search' => ['nullable', 'string', 'max:80'],
-            'limit' => ['nullable', 'integer', 'min:1', 'max:24'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
         $search = trim($data['search'] ?? '');
         $limit = (int) ($data['limit'] ?? 6);

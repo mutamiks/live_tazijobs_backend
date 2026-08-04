@@ -119,4 +119,57 @@ class AdminJobSearchTest extends TestCase
             ->assertJsonPath('data.allowances.prefer_not_to_say', true)
             ->assertJsonPath('data.status', 'approved');
     }
+
+    public function test_admin_can_update_job_details(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $employer = User::factory()->create(['role' => 'employer', 'status' => 'approved']);
+        $category = JobCategory::query()->create(['name' => 'Domestic work']);
+        $newCategory = JobCategory::query()->create(['name' => 'Customer support']);
+        EmployerProfile::query()->create([
+            'user_id' => $employer->id,
+            'company_name' => 'Bright Works Ltd',
+            'status' => 'approved',
+        ]);
+        $job = Job::query()->create([
+            'employer_id' => $employer->id,
+            'job_category_id' => $category->id,
+            'title' => 'Cleaner',
+            'description' => 'Clean offices.',
+            'job_type' => 'full_time',
+            'status' => 'approved',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/jobs/{$job->id}", [
+            'employer_id' => $employer->id,
+            'job_category_id' => $newCategory->id,
+            'title' => 'Senior Cleaner',
+            'positions' => 3,
+            'description' => 'Clean offices and supervise a team.',
+            'requirements' => 'Two years of cleaning experience.',
+            'responsibilities' => 'Team supervision and office cleaning.',
+            'district' => 'Kampala',
+            'county' => 'Kampala Central Division',
+            'subcounty' => 'Central',
+            'parish' => 'Nakasero',
+            'village' => 'Nakasero I',
+            'job_type' => 'contract',
+            'salary_min' => 300000,
+            'salary_max' => 450000,
+            'allowances' => [
+                'prefer_not_to_say' => false,
+                'items' => [
+                    ['type' => 'transport', 'amount' => 50000],
+                ],
+            ],
+            'deadline' => now()->addWeek()->toDateString(),
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.title', 'Senior Cleaner')
+            ->assertJsonPath('data.category.name', 'Customer support')
+            ->assertJsonPath('data.positions', 3)
+            ->assertJsonPath('data.allowances.items.0.type', 'transport');
+    }
 }

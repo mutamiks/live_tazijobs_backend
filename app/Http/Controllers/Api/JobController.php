@@ -12,6 +12,9 @@ class JobController extends Controller
 {
     public function index(Request $request)
     {
+        $perPage = (int) $request->integer('per_page', 50);
+        $perPage = max(1, min($perPage, 100));
+
         $jobs = Job::query()
             ->with(['category', 'employer.employerProfile'])
             ->publiclyVisible()
@@ -30,7 +33,7 @@ class JobController extends Controller
             ->when($request->query('deadline_from'), fn ($query, string $date) => $query->whereDate('deadline', '>=', $date))
             ->when($request->query('deadline_to'), fn ($query, string $date) => $query->whereDate('deadline', '<=', $date))
             ->latest()
-            ->paginate(15);
+            ->paginate($perPage);
 
         $jobs->getCollection()->transform(fn (Job $job) => $this->publicJobPayload($job));
 
@@ -67,8 +70,27 @@ class JobController extends Controller
         return response()->json(['message' => 'Job uploaded and approved by admin.', 'data' => $job->load(['category', 'employer.employerProfile'])], 201);
     }
 
+    public function adminUpdate(StoreJobRequest $request, Job $job)
+    {
+        $data = $request->validated();
+
+        if (array_key_exists('employer_id', $data)) {
+            User::query()->where('role', 'employer')->findOrFail($data['employer_id']);
+        }
+
+        $data['location'] = $data['location'] ?? $this->formatLocation($data);
+        $job->update($data);
+
+        return response()->json([
+            'message' => 'Job updated.',
+            'data' => $job->fresh(['category', 'employer.employerProfile', 'approver', 'approvalHistories.admin']),
+        ]);
+    }
+
     public function matching(Request $request)
     {
+        $perPage = (int) $request->integer('per_page', 50);
+        $perPage = max(1, min($perPage, 100));
         $profile = $request->user()->jobSeekerProfile;
 
         if (! $profile || $profile->status !== 'approved') {
@@ -85,7 +107,7 @@ class JobController extends Controller
                     ->orWhere('district', $profile->district);
             })
             ->latest()
-            ->paginate(15);
+            ->paginate($perPage);
 
         $jobs->getCollection()->transform(fn (Job $job) => $this->publicJobPayload($job));
 

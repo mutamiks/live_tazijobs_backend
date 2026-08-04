@@ -820,6 +820,9 @@ class AdminController extends Controller
 
     public function jobs(Request $request)
     {
+        $perPage = (int) $request->integer('per_page', 50);
+        $perPage = max(1, min($perPage, 100));
+
         return response()->json([
             'data' => Job::query()
                 ->with(['category', 'employer.employerProfile'])
@@ -838,7 +841,7 @@ class AdminController extends Controller
                     });
                 })
                 ->latest()
-                ->paginate(10),
+                ->paginate($perPage),
         ]);
     }
 
