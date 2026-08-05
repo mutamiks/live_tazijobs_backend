@@ -24,6 +24,10 @@ class JobApplicationController extends Controller
             return response()->json(['message' => 'Job seeker profile must be approved before applying.'], 422);
         }
 
+        if (JobApplication::query()->where('job_id', $job->id)->where('job_seeker_id', $request->user()->id)->exists()) {
+            return response()->json(['message' => 'You have already booked/applied for this job. Check My applications for the status.'], 422);
+        }
+
         $data = $request->validated();
         $data['cv_file'] = $request->file('cv_file')?->store('application-cvs', 'public') ?? ($data['cv_file'] ?? null);
 

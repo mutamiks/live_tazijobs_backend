@@ -15,14 +15,24 @@ class PublicDiscoveryController extends Controller
     {
         $data = $request->validate([
             'search' => ['nullable', 'string', 'max:80'],
+            'title' => ['nullable', 'string', 'max:80'],
+            'job_category_id' => ['nullable', 'integer', 'exists:job_categories,id'],
+            'district' => ['nullable', 'string', 'max:80'],
+            'salary_min' => ['nullable', 'numeric', 'min:0'],
+            'salary_max' => ['nullable', 'numeric', 'min:0'],
+            'worker_title' => ['nullable', 'string', 'max:80'],
+            'worker_category' => ['nullable', 'string', 'max:80'],
+            'worker_district' => ['nullable', 'string', 'max:80'],
+            'worker_skill' => ['nullable', 'string', 'max:80'],
+            'experience_years' => ['nullable', 'integer', 'min:0'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
         $search = trim($data['search'] ?? '');
         $limit = (int) ($data['limit'] ?? 6);
 
         $payload = [
-            'jobs' => $this->jobs($search, $limit),
-            'job_seekers' => $this->jobSeekers($search, $limit),
+            'jobs' => $this->jobs($search, $limit, $data),
+            'job_seekers' => $this->jobSeekers($search, $limit, $data),
         ];
 
         return response()
@@ -75,7 +85,7 @@ class PublicDiscoveryController extends Controller
         return response()->json(['message' => 'Booking request submitted. TaziJobs will contact you.', 'data' => $order], 201);
     }
 
-    private function jobs(string $search, int $limit)
+    private function jobs(string $search, int $limit, array $filters = [])
     {
         return Job::query()
             ->select([
@@ -85,6 +95,20 @@ class PublicDiscoveryController extends Controller
             ->with('category:id,name')
             ->publiclyVisible()
             ->where(fn ($query) => $query->whereNull('deadline')->orWhereDate('deadline', '>=', today()))
+            ->when($filters['title'] ?? null, fn ($query, string $title) => $query->where('title', 'like', "%{$title}%"))
+            ->when($filters['job_category_id'] ?? null, fn ($query, string|int $category) => $query->where('job_category_id', $category))
+            ->when($filters['district'] ?? null, function ($query, string $district) {
+                $query->where(function ($query) use ($district) {
+                    $query->where('district', 'like', "%{$district}%")
+                        ->orWhere('location', 'like', "%{$district}%");
+                });
+            })
+            ->when($filters['salary_min'] ?? null, fn ($query, string $salary) => $query->where(function ($query) use ($salary) {
+                $query->whereNull('salary_max')->orWhere('salary_max', '>=', $salary);
+            }))
+            ->when($filters['salary_max'] ?? null, fn ($query, string $salary) => $query->where(function ($query) use ($salary) {
+                $query->whereNull('salary_min')->orWhere('salary_min', '<=', $salary);
+            }))
             ->when($search, function ($query, string $search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('title', 'like', "%{$search}%")
@@ -98,7 +122,7 @@ class PublicDiscoveryController extends Controller
             ->get();
     }
 
-    private function jobSeekers(string $search, int $limit)
+    private function jobSeekers(string $search, int $limit, array $filters = [])
     {
         return JobSeekerProfile::query()
             ->select([
@@ -106,6 +130,11 @@ class PublicDiscoveryController extends Controller
                 'experience_years', 'profile_photo_thumbnail', 'created_at',
             ])
             ->publiclyVisible()
+            ->when($filters['worker_title'] ?? null, fn ($query, string $title) => $query->where('job_title', 'like', "%{$title}%"))
+            ->when($filters['worker_category'] ?? null, fn ($query, string $category) => $query->where('preferred_job_categories', 'like', "%{$category}%"))
+            ->when($filters['worker_district'] ?? null, fn ($query, string $district) => $query->where('district', 'like', "%{$district}%"))
+            ->when($filters['worker_skill'] ?? null, fn ($query, string $skill) => $query->where('skills', 'like', "%{$skill}%"))
+            ->when($filters['experience_years'] ?? null, fn ($query, int $years) => $query->where('experience_years', '>=', $years))
             ->when($search, function ($query, string $search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('job_title', 'like', "%{$search}%")

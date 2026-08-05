@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\AdminTicketController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CatalogController;
 use App\Http\Controllers\Api\JobApplicationController;
@@ -92,6 +93,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('users/{user}/subscription', [AdminController::class, 'assignSubscription'])->middleware('permission:manage_users,edit_users');
         Route::post('users/{user}/invoices', [AdminController::class, 'createInvoice'])->middleware('permission:manage_invoices,create_invoices,manage_users');
         Route::get('invoices', [AdminController::class, 'invoices'])->middleware('permission:manage_invoices,view_invoices,manage_users');
+        Route::patch('invoices/{payment}/pay', [AdminController::class, 'payInvoice'])->middleware('permission:manage_invoices,create_invoices,manage_users');
+        Route::get('tickets', [AdminTicketController::class, 'index'])->middleware('permission:manage_tickets,view_tickets');
+        Route::post('tickets', [AdminTicketController::class, 'store'])->middleware('permission:manage_tickets,create_tickets');
 
         Route::get('roles', [AdminController::class, 'roles'])->middleware('permission:manage_roles,view_roles,create_roles,edit_roles,create_users,manage_users,edit_users');
         Route::post('roles', [AdminController::class, 'storeRole'])->middleware('permission:manage_roles,create_roles');
@@ -135,6 +139,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('files/{type}/{id}/{field}', [AdminController::class, 'file'])->middleware('permission:approve_job_seekers,approve_employers');
 
         Route::get('applications/pending', [AdminController::class, 'pendingApplications'])->middleware('permission:approve_applications');
+        Route::get('applications', [AdminController::class, 'applications'])->middleware('permission:approve_applications');
         Route::patch('applications/{application}/decision', [AdminController::class, 'decideApplication'])->middleware('permission:approve_applications');
 
         Route::get('worker-orders/pending', [AdminController::class, 'pendingWorkerOrders'])->middleware('permission:approve_worker_orders');

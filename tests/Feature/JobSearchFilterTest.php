@@ -40,6 +40,7 @@ class JobSearchFilterTest extends TestCase
             'title' => 'Laravel Developer',
             'description' => 'Build APIs.',
             'location' => 'Kampala',
+            'district' => 'Kampala',
             'job_type' => 'remote',
             'salary_min' => 1200,
             'salary_max' => 2500,
@@ -52,6 +53,7 @@ class JobSearchFilterTest extends TestCase
             'title' => 'Office Assistant',
             'description' => 'Front desk work.',
             'location' => 'Entebbe',
+            'district' => 'Entebbe',
             'job_type' => 'full_time',
             'salary_min' => 300,
             'salary_max' => 600,
@@ -61,7 +63,7 @@ class JobSearchFilterTest extends TestCase
 
         Sanctum::actingAs($jobSeeker);
 
-        $this->getJson('/api/jobs?search=Laravel&location=Kampala&job_type=remote&salary_min=1000&salary_max=2600&deadline_from='.now()->addDay()->toDateString())
+        $this->getJson('/api/jobs?search=Laravel&district=Kampala&job_type=remote&salary_min=1000&salary_max=2600&deadline_from='.now()->addDay()->toDateString())
             ->assertOk()
             ->assertJsonCount(1, 'data.data')
             ->assertJsonPath('data.data.0.title', 'Laravel Developer');

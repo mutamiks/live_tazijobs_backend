@@ -100,6 +100,11 @@ class TaziJobAppWorkflowTest extends TestCase
         ])->assertCreated()
             ->assertJsonPath('data.status', 'submitted')
             ->assertJsonPath('data.approval_status', 'pending');
+
+        $this->postJson("/api/jobs/{$job->id}/apply", [
+            'cover_letter' => 'Trying again.',
+        ])->assertUnprocessable()
+            ->assertJsonPath('message', 'You have already booked/applied for this job. Check My applications for the status.');
     }
 
     public function test_employer_cannot_update_application_status_before_admin_approval(): void

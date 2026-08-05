@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Job;
+use App\Models\JobCategory;
 use App\Models\JobSeekerProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -78,6 +79,46 @@ class PublicDiscoveryTest extends TestCase
             ->assertJsonPath('data.jobs.0.title', 'Visible Carpenter');
     }
 
+    public function test_visitors_can_filter_public_jobs_by_separate_fields(): void
+    {
+        $employer = User::factory()->create(['role' => 'employer', 'status' => 'approved']);
+        $driverCategory = JobCategory::query()->create(['name' => 'Driving']);
+        $adminCategory = JobCategory::query()->create(['name' => 'Administration']);
+
+        Job::query()->create([
+            'employer_id' => $employer->id,
+            'job_category_id' => $driverCategory->id,
+            'title' => 'Truck Driver',
+            'description' => 'Drive deliveries.',
+            'district' => 'Kampala',
+            'location' => 'Kampala',
+            'job_type' => 'full_time',
+            'salary_min' => 700000,
+            'salary_max' => 1000000,
+            'deadline' => now()->addWeek(),
+            'status' => 'approved',
+        ]);
+
+        Job::query()->create([
+            'employer_id' => $employer->id,
+            'job_category_id' => $adminCategory->id,
+            'title' => 'Office Driver',
+            'description' => 'Office support.',
+            'district' => 'Wakiso',
+            'location' => 'Wakiso',
+            'job_type' => 'full_time',
+            'salary_min' => 250000,
+            'salary_max' => 400000,
+            'deadline' => now()->addWeek(),
+            'status' => 'approved',
+        ]);
+
+        $this->getJson('/api/public/discovery?title=Driver&job_category_id='.$driverCategory->id.'&district=Kampala&salary_min=500000&salary_max=1200000')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.jobs')
+            ->assertJsonPath('data.jobs.0.title', 'Truck Driver');
+    }
+
     public function test_public_discovery_hides_suspended_job_seekers(): void
     {
         $activeWorker = User::factory()->create(['role' => 'job_seeker', 'status' => 'approved']);
@@ -105,6 +146,41 @@ class PublicDiscoveryTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data.job_seekers')
             ->assertJsonPath('data.job_seekers.0.display_name', 'V. W.');
+    }
+
+    public function test_visitors_can_filter_public_workers_by_separate_fields(): void
+    {
+        $matchingWorker = User::factory()->create(['role' => 'job_seeker', 'status' => 'approved']);
+        $otherWorker = User::factory()->create(['role' => 'job_seeker', 'status' => 'approved']);
+
+        JobSeekerProfile::query()->create([
+            'user_id' => $matchingWorker->id,
+            'full_name' => 'Sarah Worker',
+            'job_title' => 'Housekeeper',
+            'district' => 'Kampala',
+            'skills' => ['Cooking', 'Cleaning'],
+            'preferred_job_categories' => ['Domestic work'],
+            'experience_years' => 4,
+            'status' => 'approved',
+            'is_available' => true,
+        ]);
+
+        JobSeekerProfile::query()->create([
+            'user_id' => $otherWorker->id,
+            'full_name' => 'Other Worker',
+            'job_title' => 'Driver',
+            'district' => 'Wakiso',
+            'skills' => ['Driving'],
+            'preferred_job_categories' => ['Transport'],
+            'experience_years' => 1,
+            'status' => 'approved',
+            'is_available' => true,
+        ]);
+
+        $this->getJson('/api/public/discovery?worker_title=Housekeeper&worker_category=Domestic&worker_district=Kampala&worker_skill=Cooking&experience_years=3')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.job_seekers')
+            ->assertJsonPath('data.job_seekers.0.display_name', 'S. W.');
     }
 
     public function test_visitor_can_book_worker_for_admin_follow_up(): void

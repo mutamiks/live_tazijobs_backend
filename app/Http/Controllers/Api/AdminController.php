@@ -15,6 +15,7 @@ use App\Models\SubscriptionPackage;
 use App\Models\SubscriptionPayment;
 use App\Models\User;
 use App\Models\WorkerOrder;
+use App\Services\JobSeekerJobNotifier;
 use App\Support\NotifiesUsers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -24,6 +25,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
+use Throwable;
 
 class AdminController extends Controller
 {
@@ -584,6 +586,9 @@ class AdminController extends Controller
             'manage_invoices' => 'Manage job seeker invoices',
             'view_invoices' => 'View job seeker invoices',
             'create_invoices' => 'Create job seeker invoices',
+            'manage_tickets' => 'Manage tickets',
+            'view_tickets' => 'View tickets',
+            'create_tickets' => 'Create tickets',
 
             'manage_users' => 'Manage users',
             'view_users' => 'View users',
@@ -740,6 +745,56 @@ class AdminController extends Controller
         return response()->json(['data' => $query->paginate(25)]);
     }
 
+    public function payInvoice(Request $request, SubscriptionPayment $payment)
+    {
+        abort_if(blank($payment->invoice_number), 404, 'Invoice not found.');
+
+        $data = $request->validate([
+            'phone' => ['required', 'regex:/^(?:\+?256|0)?7\d{8}$/'],
+            'admin_notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        if ($payment->status === 'confirmed') {
+            return response()->json([
+                'message' => 'This invoice is already paid.',
+                'data' => $payment->load(['user.jobSeekerProfile', 'package', 'job.employer.employerProfile', 'creator:id,name']),
+            ]);
+        }
+
+        $sms = app(SmsService::class);
+        $phone = $sms->normalizePhone($data['phone']);
+        $note = 'Payment request sent by admin '.($request->user()->name ?? 'administrator').' on '.now()->toDateTimeString().'.';
+        if (filled($data['admin_notes'] ?? null)) {
+            $note .= "\n".$data['admin_notes'];
+        }
+
+        try {
+            $provider = $sms->requestPayment((float) $payment->amount, $phone, 'Invoice Payment');
+            if (strtoupper($provider['Status'] ?? '') === 'ERROR') {
+                throw ValidationException::withMessages(['payment' => $sms->providerMessage($provider)]);
+            }
+
+            $payment->update([
+                'phone' => $phone,
+                'status' => 'pending',
+                'transaction_reference' => $provider['TransactionReference'] ?? null,
+                'status_message' => $provider['StatusMessage'] ?? 'Awaiting confirmation on the phone.',
+                'admin_notes' => trim(implode("\n\n", array_filter([$payment->admin_notes, $note]))),
+                'processing_attempts' => 0,
+                'last_checked_at' => null,
+            ]);
+
+            return response()->json([
+                'message' => 'Payment request sent. Confirm it on the phone.',
+                'data' => $payment->fresh(['user.jobSeekerProfile', 'package', 'job.employer.employerProfile', 'creator:id,name']),
+            ]);
+        } catch (ValidationException $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+    }
+
     public function showJobSeeker(JobSeekerProfile $profile)
     {
         return response()->json(['data' => $profile->load(['user.activeJobSeekerSubscription.package', 'approver', 'approvalHistories.admin'])]);
@@ -820,6 +875,19 @@ class AdminController extends Controller
 
     public function jobs(Request $request)
     {
+        $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'job_category_id' => ['nullable', 'integer', 'exists:job_categories,id'],
+            'district' => ['nullable', 'string', 'max:100'],
+            'job_type' => ['nullable', 'string', 'max:50'],
+            'listing' => ['nullable', Rule::in(['listed', 'unlisted'])],
+            'salary_min' => ['nullable', 'numeric', 'min:0'],
+            'salary_max' => ['nullable', 'numeric', 'min:0'],
+            'deadline_from' => ['nullable', 'date'],
+            'deadline_to' => ['nullable', 'date'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
         $perPage = (int) $request->integer('per_page', 50);
         $perPage = max(1, min($perPage, 100));
 
@@ -827,6 +895,23 @@ class AdminController extends Controller
             'data' => Job::query()
                 ->with(['category', 'employer.employerProfile'])
                 ->where('status', 'approved')
+                ->when($request->query('job_category_id'), fn ($query, string $category) => $query->where('job_category_id', $category))
+                ->when($request->query('district'), function ($query, string $district) {
+                    $query->where(function ($query) use ($district) {
+                        $query->where('district', 'like', "%{$district}%")
+                            ->orWhere('location', 'like', "%{$district}%");
+                    });
+                })
+                ->when($request->query('job_type'), fn ($query, string $type) => $query->where('job_type', $type))
+                ->when($request->query('listing'), fn ($query, string $listing) => $query->where('is_listed', $listing === 'listed'))
+                ->when($request->query('salary_min'), fn ($query, string $salary) => $query->where(function ($query) use ($salary) {
+                    $query->whereNull('salary_max')->orWhere('salary_max', '>=', $salary);
+                }))
+                ->when($request->query('salary_max'), fn ($query, string $salary) => $query->where(function ($query) use ($salary) {
+                    $query->whereNull('salary_min')->orWhere('salary_min', '<=', $salary);
+                }))
+                ->when($request->query('deadline_from'), fn ($query, string $date) => $query->whereDate('deadline', '>=', $date))
+                ->when($request->query('deadline_to'), fn ($query, string $date) => $query->whereDate('deadline', '<=', $date))
                 ->when($request->query('search'), function ($query, string $search) {
                     $query->where(function ($query) use ($search) {
                         $query->where('title', 'like', "%{$search}%")
@@ -900,6 +985,39 @@ class AdminController extends Controller
                 ->latest()
                 ->paginate(15),
         ]);
+    }
+
+    public function applications(Request $request)
+    {
+        $request->validate([
+            'status' => ['nullable', 'string', 'max:50'],
+            'search' => ['nullable', 'string', 'max:100'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $perPage = (int) $request->integer('per_page', 25);
+        $perPage = max(1, min($perPage, 100));
+
+        $query = JobApplication::query()
+            ->with(['job.employer.employerProfile', 'jobSeeker.jobSeekerProfile', 'approver:id,name'])
+            ->latest();
+
+        $query->when($request->query('status'), fn ($query, string $status) => $query->where('approval_status', $status));
+        $query->when($request->query('search'), function ($query, string $search) {
+            $query->where(function ($query) use ($search) {
+                $query->where('cover_letter', 'like', "%{$search}%")
+                    ->orWhere('status', 'like', "%{$search}%")
+                    ->orWhere('approval_status', 'like', "%{$search}%")
+                    ->orWhereHas('job', fn ($query) => $query->where('title', 'like', "%{$search}%")
+                        ->orWhereHas('employer', fn ($query) => $query->where('name', 'like', "%{$search}%")
+                            ->orWhereHas('employerProfile', fn ($query) => $query->where('company_name', 'like', "%{$search}%"))))
+                    ->orWhereHas('jobSeeker', fn ($query) => $query->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%"));
+            });
+        });
+
+        return response()->json(['data' => $query->paginate($perPage)]);
     }
 
     public function decideApplication(ApprovalDecisionRequest $request, JobApplication $application)
@@ -1099,6 +1217,9 @@ class AdminController extends Controller
 
         if ($approved && $model instanceof JobSeekerProfile && filled($data['subscription_package_id'] ?? null)) {
             $this->saveSubscriptionPackage($owner, (int) $data['subscription_package_id']);
+        }
+        if ($approved && $model instanceof Job && $fromStatus !== 'approved') {
+            app(JobSeekerJobNotifier::class)->notifyForApprovedJob($model);
         }
         $this->notifyUser(
             $owner,

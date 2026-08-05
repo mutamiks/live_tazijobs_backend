@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreJobRequest;
 use App\Models\Job;
 use App\Models\User;
+use App\Services\JobSeekerJobNotifier;
 use Illuminate\Http\Request;
 
 class JobController extends Controller
@@ -19,8 +20,20 @@ class JobController extends Controller
             ->with(['category', 'employer.employerProfile'])
             ->publiclyVisible()
             ->when($request->query('job_category_id'), fn ($query, string $category) => $query->where('job_category_id', $category))
+            ->when($request->query('title'), fn ($query, string $title) => $query->where('title', 'like', "%{$title}%"))
             ->when($request->query('search'), function ($query, string $search) {
-                $query->where('title', 'like', "%{$search}%");
+                $query->where(function ($query) use ($search) {
+                    $query->where('title', 'like', "%{$search}%")
+                        ->orWhere('location', 'like', "%{$search}%")
+                        ->orWhere('district', 'like', "%{$search}%")
+                        ->orWhereHas('category', fn ($query) => $query->where('name', 'like', "%{$search}%"));
+                });
+            })
+            ->when($request->query('district'), function ($query, string $district) {
+                $query->where(function ($query) use ($district) {
+                    $query->where('district', 'like', "%{$district}%")
+                        ->orWhere('location', 'like', "%{$district}%");
+                });
             })
             ->when($request->query('location'), fn ($query, string $location) => $query->where('location', 'like', "%{$location}%"))
             ->when($request->query('job_type'), fn ($query, string $type) => $query->where('job_type', $type))
@@ -54,7 +67,7 @@ class JobController extends Controller
         return response()->json(['message' => 'Job submitted for approval.', 'data' => $job], 201);
     }
 
-    public function adminStore(StoreJobRequest $request)
+    public function adminStore(StoreJobRequest $request, JobSeekerJobNotifier $jobNotifier)
     {
         $data = $request->validated();
         $employer = User::query()->where('role', 'employer')->findOrFail($data['employer_id'] ?? null);
@@ -66,6 +79,7 @@ class JobController extends Controller
             'approved_by' => $request->user()->id,
             'approved_at' => now(),
         ]);
+        $jobNotifier->notifyForApprovedJob($job);
 
         return response()->json(['message' => 'Job uploaded and approved by admin.', 'data' => $job->load(['category', 'employer.employerProfile'])], 201);
     }

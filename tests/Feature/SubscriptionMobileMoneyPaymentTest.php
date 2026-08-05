@@ -170,6 +170,62 @@ class SubscriptionMobileMoneyPaymentTest extends TestCase
             ->assertJsonPath('data.transaction_reference', 'INV-123');
     }
 
+    public function test_admin_can_send_invoice_mobile_money_request_on_behalf_of_job_seeker(): void
+    {
+        config([
+            'sms.enabled' => true,
+            'sms.payment_url' => 'https://payments.example.test/task.php',
+            'sms.payment_username' => 'merchant',
+            'sms.payment_password' => 'secret',
+            'sms.payment_method' => 'mmdeposit',
+        ]);
+
+        Http::fake([
+            'payments.example.test/*' => Http::response(
+                '<?xml version="1.0"?><AutoCreate><Response><Status>OK</Status><StatusMessage>Pending approval</StatusMessage><TransactionReference>ADMIN-INV-123</TransactionReference></Response></AutoCreate>',
+                200,
+            ),
+        ]);
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        $jobSeeker = User::factory()->create(['role' => 'job_seeker', 'status' => 'approved']);
+        $package = SubscriptionPackage::query()->create([
+            'name' => 'Starter',
+            'price' => 15000,
+            'job_chance_limit' => 2,
+            'priority_level' => 1,
+        ]);
+        $invoice = SubscriptionPayment::query()->create([
+            'user_id' => $jobSeeker->id,
+            'subscription_package_id' => $package->id,
+            'created_by' => $admin->id,
+            'invoice_number' => 'TZINV-ADMIN',
+            'amount' => 15000,
+            'description' => 'Admin-cleared invoice.',
+            'type' => 'invoice',
+            'status' => 'unpaid',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/invoices/{$invoice->id}/pay", [
+            'phone' => '0772123456',
+            'admin_notes' => 'Cash received at office.',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'pending')
+            ->assertJsonPath('data.phone', '256772123456')
+            ->assertJsonPath('data.transaction_reference', 'ADMIN-INV-123');
+
+        $this->assertDatabaseHas('subscription_payments', [
+            'id' => $invoice->id,
+            'phone' => '256772123456',
+            'status' => 'pending',
+            'transaction_reference' => 'ADMIN-INV-123',
+        ]);
+        $this->assertDatabaseCount('job_seeker_subscriptions', 0);
+    }
+
     public function test_suspended_job_seeker_can_still_view_and_refresh_own_invoice(): void
     {
         config([
