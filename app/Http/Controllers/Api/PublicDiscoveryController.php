@@ -18,6 +18,7 @@ class PublicDiscoveryController extends Controller
             'title' => ['nullable', 'string', 'max:80'],
             'job_category_id' => ['nullable', 'integer', 'exists:job_categories,id'],
             'district' => ['nullable', 'string', 'max:80'],
+            'county' => ['nullable', 'string', 'max:80'],
             'salary_min' => ['nullable', 'numeric', 'min:0'],
             'salary_max' => ['nullable', 'numeric', 'min:0'],
             'worker_title' => ['nullable', 'string', 'max:80'],
@@ -44,13 +45,17 @@ class PublicDiscoveryController extends Controller
     {
         abort_unless(
             $profile->isPubliclyVisible()
-            && $profile->profile_photo_thumbnail
-            && Storage::disk('public')->exists($profile->profile_photo_thumbnail),
+            && ($profile->profile_photo_thumbnail || $profile->profile_photo),
             404,
         );
 
+        $path = collect([$profile->profile_photo_thumbnail, $profile->profile_photo])
+            ->first(fn (?string $path) => $path && Storage::disk('public')->exists($path));
+
+        abort_unless($path, 404);
+
         return Storage::disk('public')->response(
-            $profile->profile_photo_thumbnail,
+            $path,
             null,
             ['Cache-Control' => 'public, max-age=86400'],
         );
@@ -89,7 +94,7 @@ class PublicDiscoveryController extends Controller
     {
         return Job::query()
             ->select([
-                'id', 'job_category_id', 'title', 'location', 'district',
+                'id', 'job_category_id', 'title', 'location', 'district', 'county',
                 'job_type', 'salary_min', 'salary_max', 'deadline', 'created_at',
             ])
             ->with('category:id,name')
@@ -103,6 +108,12 @@ class PublicDiscoveryController extends Controller
                         ->orWhere('location', 'like', "%{$district}%");
                 });
             })
+            ->when($filters['county'] ?? null, function ($query, string $county) {
+                $query->where(function ($query) use ($county) {
+                    $query->where('county', 'like', "%{$county}%")
+                        ->orWhere('location', 'like', "%{$county}%");
+                });
+            })
             ->when($filters['salary_min'] ?? null, fn ($query, string $salary) => $query->where(function ($query) use ($salary) {
                 $query->whereNull('salary_max')->orWhere('salary_max', '>=', $salary);
             }))
@@ -114,6 +125,7 @@ class PublicDiscoveryController extends Controller
                     $query->where('title', 'like', "%{$search}%")
                         ->orWhere('location', 'like', "%{$search}%")
                         ->orWhere('district', 'like', "%{$search}%")
+                        ->orWhere('county', 'like', "%{$search}%")
                         ->orWhereHas('category', fn ($query) => $query->where('name', 'like', "%{$search}%"));
                 });
             })

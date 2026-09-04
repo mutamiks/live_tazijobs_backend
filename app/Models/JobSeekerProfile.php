@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
-use Illuminate\Support\Facades\Storage;
 
 class JobSeekerProfile extends Model
 {
@@ -94,8 +93,8 @@ class JobSeekerProfile extends Model
 
     public function getProfilePhotoThumbnailUrlAttribute(): ?string
     {
-        return $this->profile_photo_thumbnail
-            ? Storage::disk('public')->url($this->profile_photo_thumbnail)
+        return ($this->profile_photo_thumbnail || $this->profile_photo)
+            ? route('public.job-seeker-thumbnail', $this)
             : null;
     }
 }

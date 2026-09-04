@@ -26,6 +26,7 @@ class JobController extends Controller
                     $query->where('title', 'like', "%{$search}%")
                         ->orWhere('location', 'like', "%{$search}%")
                         ->orWhere('district', 'like', "%{$search}%")
+                        ->orWhere('county', 'like', "%{$search}%")
                         ->orWhereHas('category', fn ($query) => $query->where('name', 'like', "%{$search}%"));
                 });
             })
@@ -33,6 +34,12 @@ class JobController extends Controller
                 $query->where(function ($query) use ($district) {
                     $query->where('district', 'like', "%{$district}%")
                         ->orWhere('location', 'like', "%{$district}%");
+                });
+            })
+            ->when($request->query('county'), function ($query, string $county) {
+                $query->where(function ($query) use ($county) {
+                    $query->where('county', 'like', "%{$county}%")
+                        ->orWhere('location', 'like', "%{$county}%");
                 });
             })
             ->when($request->query('location'), fn ($query, string $location) => $query->where('location', 'like', "%{$location}%"))
