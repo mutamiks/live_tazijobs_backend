@@ -61,6 +61,22 @@ class PublicDiscoveryController extends Controller
         );
     }
 
+    public function job(int $job)
+    {
+        $job = Job::query()
+            ->with('category:id,name')
+            ->publiclyVisible()
+            ->whereKey($job)
+            ->where(fn ($query) => $query->whereNull('deadline')->orWhereDate('deadline', '>=', today()))
+            ->firstOrFail();
+
+        return response()->json(['data' => $job->only([
+            'id', 'title', 'positions', 'description', 'requirements', 'responsibilities',
+            'location', 'district', 'county', 'subcounty', 'parish', 'village',
+            'job_type', 'salary_min', 'salary_max', 'allowances', 'deadline', 'created_at',
+        ]) + ['category' => $job->category]]);
+    }
+
     public function storeWorkerContact(Request $request)
     {
         $data = $request->validate([
