@@ -9,6 +9,18 @@ use Illuminate\Validation\Rule;
 
 class AdminTicketController extends Controller
 {
+    public function close(Request $request, Ticket $ticket)
+    {
+        $ticket->update([
+            'status' => 'closed',
+        ]);
+
+        return response()->json([
+            'message' => 'Ticket closed.',
+            'data' => $ticket->fresh()->load('creator:id,name'),
+        ]);
+    }
+
     public function index(Request $request)
     {
         $request->validate([

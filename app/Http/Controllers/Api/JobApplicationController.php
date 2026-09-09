@@ -7,12 +7,15 @@ use App\Http\Requests\StoreJobApplicationRequest;
 use App\Http\Requests\UpdateApplicationStatusRequest;
 use App\Models\Job;
 use App\Models\JobApplication;
+use App\Services\AdminApprovalNotifier;
 use App\Support\NotifiesUsers;
 use Illuminate\Http\Request;
 
 class JobApplicationController extends Controller
 {
     use NotifiesUsers;
+
+    public function __construct(private readonly AdminApprovalNotifier $adminApprovalNotifier) {}
 
     public function apply(StoreJobApplicationRequest $request, Job $job)
     {
@@ -39,6 +42,11 @@ class JobApplicationController extends Controller
         ]);
 
         $this->notifyUser($request->user(), 'job_application_pending', 'Application submitted for review', "Your application for {$job->title} is pending admin approval.");
+
+        $this->adminApprovalNotifier->notifyAdmins(
+            'New job application awaiting approval',
+            "A job application for {$job->title} is awaiting administrative approval."
+        );
 
         return response()->json(['message' => 'Application submitted for admin approval.', 'data' => $application], 201);
     }

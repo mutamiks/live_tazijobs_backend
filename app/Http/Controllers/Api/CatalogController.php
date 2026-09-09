@@ -15,6 +15,24 @@ use Illuminate\Support\Facades\File;
 
 class CatalogController extends Controller
 {
+    private const UGANDA_DISTRICTS = [
+        'Abim', 'Adjumani', 'Agago', 'Alebtong', 'Amolatar', 'Amudat', 'Amuria', 'Amuru',
+        'Apac', 'Arua', 'Budaka', 'Bududa', 'Bugiri', 'Bugweri', 'Buhweju', 'Buikwe',
+        'Bukedea', 'Bukomansimbi', 'Bukwo', 'Bulambuli', 'Buliisa', 'Bundibugyo', 'Bushenyi',
+        'Busia', 'Butaleja', 'Butebo', 'Buvuma', 'Buyende', 'Dokolo', 'Gomba', 'Gulu',
+        'Hoima', 'Ibanda', 'Iganga', 'Isingiro', 'Jinja', 'Kaabong', 'Kabale', 'Kabarole',
+        'Kaberamaido', 'Kalangala', 'Kaliro', 'Kalungu', 'Kamuli', 'Kamwenge', 'Kanungu',
+        'Kapchorwa', 'Kasanda', 'Kasese', 'Katakwi', 'Kayunga', 'Kazo', 'Kibaale', 'Kiboga',
+        'Kibuku', 'Kiruhura', 'Kiryandongo', 'Koboko', 'Kole', 'Kotido', 'Kumi', 'Kwania',
+        'Kween', 'Kyankwanzi', 'Kyegegwa', 'Kyenjojo', 'Kyotera', 'Lamwo', 'Lira', 'Luuka',
+        'Luwero', 'Lwengo', 'Lyantonde', 'Madi-Okollo', 'Manafwa', 'Maracha', 'Mbale',
+        'Mbarara', 'Mitooma', 'Mityana', 'Moroto', 'Moyo', 'Mpigi', 'Mubende', 'Mukono',
+        'Nabilatuk', 'Nakapiripirit', 'Nakaseke', 'Nakasongola', 'Namayingo', 'Namiumba',
+        'Napak', 'Nebbi', 'Ngora', 'Ntoroko', 'Ntungamo', 'Nwoya', 'Obongi', 'Omoro',
+        'Otuke', 'Oyam', 'Pader', 'Pallisa', 'Rakai', 'Rukiga', 'Rukungiri', 'Rushenyi',
+        'Serere', 'Sheema', 'Sironko', 'Soroti', 'Tororo', 'Wakiso', 'Yumbe', 'Zombo',
+    ];
+
     public function index()
     {
         return response()->json([
@@ -120,13 +138,81 @@ class CatalogController extends Controller
         }
 
         $basePath = storage_path('app/public/ugandaData');
+        $districts = $this->readLocationJson($basePath.'/districts.json');
+        $counties = $this->readLocationJson($basePath.'/counties.json');
+        $subcounties = $this->readLocationJson($basePath.'/sub_counties.json');
+        $parishes = $this->readLocationJson($basePath.'/parishes.json');
+        $villages = $this->readLocationJson($basePath.'/villages.json');
+
+        if (empty($districts) || empty($counties) || empty($subcounties) || empty($parishes) || empty($villages)) {
+            return $this->ugandaLocationDataFromDatabase();
+        }
 
         return $data = [
-            'districts' => $this->readLocationJson($basePath.'/districts.json'),
-            'counties' => $this->readLocationJson($basePath.'/counties.json'),
-            'subcounties' => $this->readLocationJson($basePath.'/sub_counties.json'),
-            'parishes' => $this->readLocationJson($basePath.'/parishes.json'),
-            'villages' => $this->readLocationJson($basePath.'/villages.json'),
+            'districts' => $districts,
+            'counties' => $counties,
+            'subcounties' => $subcounties,
+            'parishes' => $parishes,
+            'villages' => $villages,
+        ];
+    }
+
+    private function ugandaLocationDataFromDatabase(): array
+    {
+        $locations = UgandaLocation::query()
+            ->where('is_active', true)
+            ->orderBy('district')
+            ->orderBy('county')
+            ->orderBy('subcounty')
+            ->orderBy('parish')
+            ->orderBy('village')
+            ->get();
+
+        $districtNames = $locations
+            ->pluck('district')
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        $districts = array_values(array_unique(array_merge(self::UGANDA_DISTRICTS, $districtNames)));
+        $districts = array_map(fn (string $district) => ['id' => $district, 'name' => $district], $districts);
+
+        $counties = $locations
+            ->map(fn ($location) => ['id' => (string) $location->county, 'name' => $location->county, 'district' => (string) $location->district])
+            ->unique(fn (array $row) => $row['district'].'|'.$row['id'])
+            ->sortBy('name')
+            ->values()
+            ->all();
+
+        $subcounties = $locations
+            ->map(fn ($location) => ['id' => (string) $location->subcounty, 'name' => $location->subcounty, 'county' => (string) $location->county])
+            ->unique(fn (array $row) => $row['county'].'|'.$row['id'])
+            ->sortBy('name')
+            ->values()
+            ->all();
+
+        $parishes = $locations
+            ->map(fn ($location) => ['id' => (string) $location->parish, 'name' => $location->parish, 'subcounty' => (string) $location->subcounty])
+            ->unique(fn (array $row) => $row['subcounty'].'|'.$row['id'])
+            ->sortBy('name')
+            ->values()
+            ->all();
+
+        $villages = $locations
+            ->map(fn ($location) => ['id' => (string) $location->village, 'name' => $location->village, 'parish' => (string) $location->parish])
+            ->unique(fn (array $row) => $row['parish'].'|'.$row['id'])
+            ->sortBy('name')
+            ->values()
+            ->all();
+
+        return [
+            'districts' => $districts,
+            'counties' => $counties,
+            'subcounties' => $subcounties,
+            'parishes' => $parishes,
+            'villages' => $villages,
         ];
     }
 

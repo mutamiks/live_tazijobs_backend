@@ -37,6 +37,32 @@ class AdminTicketManagementTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_close_a_ticket(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
+        $ticket = Ticket::query()->create([
+            'created_by' => $admin->id,
+            'client_full_name' => 'Jane Applicant',
+            'phones' => ['0772123456'],
+            'client_type' => 'job_seeker',
+            'ticket_type' => 'Payment issue',
+            'comment' => 'Invoice payment is not reflecting.',
+            'status' => 'open',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/tickets/{$ticket->id}/close")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'closed')
+            ->assertJsonPath('data.id', $ticket->id);
+
+        $this->assertDatabaseHas('tickets', [
+            'id' => $ticket->id,
+            'status' => 'closed',
+        ]);
+    }
+
     public function test_admin_can_search_tickets_by_name_phone_and_type(): void
     {
         $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);

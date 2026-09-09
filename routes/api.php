@@ -97,6 +97,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('invoices/{payment}/pay', [AdminController::class, 'payInvoice'])->middleware('permission:manage_invoices,create_invoices,manage_users');
         Route::get('tickets', [AdminTicketController::class, 'index'])->middleware('permission:manage_tickets,view_tickets');
         Route::post('tickets', [AdminTicketController::class, 'store'])->middleware('permission:manage_tickets,create_tickets');
+        Route::patch('tickets/{ticket}/close', [AdminTicketController::class, 'close'])->middleware('permission:manage_tickets,edit_tickets');
 
         Route::get('roles', [AdminController::class, 'roles'])->middleware('permission:manage_roles,view_roles,create_roles,edit_roles,create_users,manage_users,edit_users');
         Route::post('roles', [AdminController::class, 'storeRole'])->middleware('permission:manage_roles,create_roles');

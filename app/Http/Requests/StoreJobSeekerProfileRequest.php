@@ -32,7 +32,7 @@ class StoreJobSeekerProfileRequest extends FormRequest
             'languages' => ['required', 'array', 'min:1'],
             'languages.*' => ['string', 'max:100', Rule::exists('languages', 'name')->where('is_active', true)],
             'religion' => ['required', 'string', 'max:100', Rule::exists('religions', 'name')->where('is_active', true)],
-            'education_level' => ['nullable', Rule::in(self::EDUCATION_LEVELS)],
+            'education_level' => ['required', 'string', Rule::in(self::EDUCATION_LEVELS)],
             'skills' => ['nullable', 'array'],
             'skills.*' => ['string', 'max:100'],
             'experience_years' => ['nullable', 'integer', 'min:0', 'max:80'],

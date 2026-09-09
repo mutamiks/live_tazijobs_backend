@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreEmployerProfileRequest;
 use App\Http\Requests\StoreJobSeekerProfileRequest;
+use App\Services\AdminApprovalNotifier;
 use App\Services\SmsService;
 use App\Support\NotifiesUsers;
 use Illuminate\Http\Request;
@@ -15,6 +16,8 @@ use Illuminate\Validation\ValidationException;
 class ProfileController extends Controller
 {
     use NotifiesUsers;
+
+    public function __construct(private readonly AdminApprovalNotifier $adminApprovalNotifier) {}
 
     public function submitJobSeeker(StoreJobSeekerProfileRequest $request)
     {
@@ -53,6 +56,11 @@ class ProfileController extends Controller
             'TaziJobs: Your worker account was created and is under review.'
         );
 
+        $this->adminApprovalNotifier->notifyAdmins(
+            'New job seeker profile awaiting approval',
+            "A job seeker profile named {$request->user()->name} is awaiting administrative approval."
+        );
+
         return response()->json(['message' => 'Job seeker profile submitted.', 'data' => $profile], 201);
     }
 
@@ -85,6 +93,11 @@ class ProfileController extends Controller
             'Employer account under review',
             'Your TaziJobs employer account has been created and is under admin review.',
             'TaziJobs: Your employer account was created and is under review.'
+        );
+
+        $this->adminApprovalNotifier->notifyAdmins(
+            'New employer profile awaiting approval',
+            "An employer profile named {$request->user()->name} is awaiting administrative approval."
         );
 
         return response()->json(['message' => 'Employer profile submitted.', 'data' => $profile], 201);

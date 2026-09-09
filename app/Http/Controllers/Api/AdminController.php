@@ -74,6 +74,8 @@ class AdminController extends Controller
             })
             ->when($request->query('role'), fn ($query, string $role) => $query->where('role', $role))
             ->when($request->query('status'), fn ($query, string $status) => $query->where('status', $status))
+            ->when(! $request->filled('search') && ! $request->filled('status'), fn ($query) => $query->where('status', 'approved'))
+            ->orderByRaw("CASE WHEN status = 'approved' THEN 1 WHEN status = 'pending' THEN 2 WHEN status = 'rejected' THEN 3 WHEN status = 'suspended' THEN 4 ELSE 5 END")
             ->latest()
             ->paginate(20);
 
@@ -191,7 +193,7 @@ class AdminController extends Controller
             'profile.languages' => ['required_if:role,job_seeker', 'nullable', 'array'],
             'profile.languages.*' => ['string', 'max:100'],
             'profile.religion' => ['required_if:role,job_seeker', 'nullable', 'string', 'max:100'],
-            'profile.education_level' => ['nullable', Rule::in(self::EDUCATION_LEVELS)],
+            'profile.education_level' => ['required_if:role,job_seeker', 'string', Rule::in(self::EDUCATION_LEVELS)],
             'profile.skills' => ['nullable', 'array'],
             'profile.skills.*' => ['string', 'max:100'],
             'profile.experience_years' => ['nullable', 'integer', 'min:0', 'max:80'],
@@ -385,7 +387,7 @@ class AdminController extends Controller
             'profile.languages' => ['nullable', 'array'],
             'profile.languages.*' => ['string', 'max:100'],
             'profile.religion' => ['nullable', 'string', 'max:100'],
-            'profile.education_level' => ['nullable', Rule::in(self::EDUCATION_LEVELS)],
+            'profile.education_level' => ['required_if:role,job_seeker', 'nullable', Rule::in(self::EDUCATION_LEVELS)],
             'profile.skills' => ['nullable', 'array'],
             'profile.skills.*' => ['string', 'max:100'],
             'profile.experience_years' => ['nullable', 'integer', 'min:0', 'max:80'],

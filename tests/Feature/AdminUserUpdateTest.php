@@ -190,6 +190,38 @@ class AdminUserUpdateTest extends TestCase
         ]);
     }
 
+    public function test_admin_user_update_requires_education_level_for_job_seeker_profile(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
+        $user = User::factory()->create([
+            'email' => 'worker-required-education@example.test',
+            'phone' => '+256701111111',
+            'role' => 'job_seeker',
+            'status' => 'approved',
+        ]);
+        JobSeekerProfile::query()->create([
+            'user_id' => $user->id,
+            'full_name' => 'Original Worker',
+            'status' => 'pending',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/users/{$user->id}", [
+            'name' => 'Updated Worker',
+            'email' => 'worker-required-education@example.test',
+            'phone' => '0772123456',
+            'role' => 'job_seeker',
+            'status' => 'approved',
+            'admin_role_id' => null,
+            'profile' => [
+                'full_name' => 'Updated Profile Name',
+                'education_level' => '',
+            ],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('profile.education_level');
+    }
+
     public function test_admin_user_update_rejects_invalid_education_level(): void
     {
         $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);

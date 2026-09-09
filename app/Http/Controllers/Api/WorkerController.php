@@ -6,12 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreWorkerOrderRequest;
 use App\Models\JobSeekerProfile;
 use App\Models\WorkerOrder;
+use App\Services\AdminApprovalNotifier;
 use App\Support\NotifiesUsers;
 use Illuminate\Http\Request;
 
 class WorkerController extends Controller
 {
     use NotifiesUsers;
+
+    public function __construct(private readonly AdminApprovalNotifier $adminApprovalNotifier) {}
 
     public function index(Request $request)
     {
@@ -74,6 +77,11 @@ class WorkerController extends Controller
             'worker_request',
             'New worker request submitted',
             "{$request->user()->name} requested to match with you. Admin review is pending."
+        );
+
+        $this->adminApprovalNotifier->notifyAdmins(
+            'New worker order awaiting approval',
+            "A worker order request from {$request->user()->name} is awaiting administrative approval."
         );
 
         return response()->json(['message' => 'Worker request submitted for admin review.', 'data' => $order], 201);

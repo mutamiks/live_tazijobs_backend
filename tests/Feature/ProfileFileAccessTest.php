@@ -54,6 +54,30 @@ class ProfileFileAccessTest extends TestCase
             ->assertHeader('cache-control', 'max-age=3600, private');
     }
 
+    public function test_job_seeker_profile_exposes_photo_and_document_urls_for_dashboard_visibility(): void
+    {
+        Storage::fake('public');
+        Storage::disk('public')->put('profile-photos/photo.jpg', 'photo-bytes');
+        Storage::disk('public')->put('id-documents/front.jpg', 'front-bytes');
+        Storage::disk('public')->put('id-documents/back.jpg', 'back-bytes');
+        Storage::disk('public')->put('id-documents/id.pdf', 'id-bytes');
+
+        $jobSeeker = User::factory()->create(['role' => 'job_seeker']);
+        $profile = JobSeekerProfile::query()->create([
+            'user_id' => $jobSeeker->id,
+            'full_name' => 'Amina Namara',
+            'profile_photo' => 'profile-photos/photo.jpg',
+            'id_document_front_file' => 'id-documents/front.jpg',
+            'id_document_back_file' => 'id-documents/back.jpg',
+            'id_document_file' => 'id-documents/id.pdf',
+        ]);
+
+        $this->assertSame(Storage::disk('public')->url('profile-photos/photo.jpg'), $profile->profile_photo_url);
+        $this->assertSame(Storage::disk('public')->url('id-documents/front.jpg'), $profile->id_document_front_file_url);
+        $this->assertSame(Storage::disk('public')->url('id-documents/back.jpg'), $profile->id_document_back_file_url);
+        $this->assertSame(Storage::disk('public')->url('id-documents/id.pdf'), $profile->id_document_file_url);
+    }
+
     public function test_profile_file_endpoint_rejects_fields_for_the_wrong_account_type(): void
     {
         $jobSeeker = User::factory()->create(['role' => 'job_seeker']);
