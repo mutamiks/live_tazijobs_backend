@@ -32,7 +32,7 @@ Route::get('public/job-seekers/{profile}/thumbnail', [PublicDiscoveryController:
 Route::get('subscription-packages', [SubscriptionController::class, 'packages']);
 Route::get('catalogs', [CatalogController::class, 'index']);
 Route::get('locations/uganda', function () {
-    $basePath = storage_path('app/public/ugandaData');
+    $basePath = storage_path('app/public/ugandaData/Data');
     $load = fn (string $file) => File::exists("{$basePath}/{$file}")
         ? (json_decode(File::get("{$basePath}/{$file}"), true) ?: [])
         : [];

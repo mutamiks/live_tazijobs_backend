@@ -11,28 +11,23 @@ class UgandaLocationJsonTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_uganda_locations_fall_back_to_database_when_location_json_files_are_missing(): void
+    public function test_uganda_locations_are_loaded_from_the_canonical_json_dataset_and_cascaded(): void
     {
-        UgandaLocation::query()->create([
-            'district' => 'Kampala',
-            'county' => 'Kampala Central Division',
-            'subcounty' => 'Kampala Central',
-            'parish' => 'Nakasero I',
-            'village' => 'NAKASERO',
-            'is_active' => true,
-        ]);
-
         $districtResponse = $this->getJson('/api/locations/uganda?district=Kampala')
             ->assertOk();
 
         $this->assertContains('Kampala', $districtResponse->json('data.districts'));
-        $this->assertContains('Kampala Central', $districtResponse->json('data.counties'));
+        $this->assertContains('Kampala Central Division', $districtResponse->json('data.counties'));
 
-        $subcountyResponse = $this->getJson('/api/locations/uganda?district=Kampala&county=Kampala%20Central&subcounty=Central')
+        $subcountyResponse = $this->getJson('/api/locations/uganda?district=Kampala&county=Kampala%20Central%20Division')
             ->assertOk();
 
-        $this->assertContains('Central', $subcountyResponse->json('data.subcounties'));
-        $this->assertContains('Nakasero', $subcountyResponse->json('data.parishes'));
+        $this->assertContains('Kampala Central', $subcountyResponse->json('data.subcounties'));
+
+        $parishResponse = $this->getJson('/api/locations/uganda?district=Kampala&county=Kampala%20Central%20Division&subcounty=Kampala%20Central')
+            ->assertOk();
+
+        $this->assertContains('Bukesa', $parishResponse->json('data.parishes'));
     }
 
     public function test_location_json_export_command_generates_the_expected_file_contract(): void
