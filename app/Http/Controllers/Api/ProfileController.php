@@ -28,8 +28,9 @@ class ProfileController extends Controller
         $data['cv_file'] = $request->file('cv_file')?->store('job-seeker-cvs', 'public') ?? ($data['cv_file'] ?? null);
         $data['lc1_letter_file'] = $request->file('lc1_letter_file')?->store('lc1-letters', 'public') ?? ($data['lc1_letter_file'] ?? null);
         $data['id_document_file'] = $request->file('id_document_file')?->store('id-documents', 'public') ?? ($data['id_document_file'] ?? null);
-        $data['id_document_front_file'] = $request->file('id_document_front_file')?->store('id-documents', 'public') ?? ($data['id_document_front_file'] ?? null);
-        $data['id_document_back_file'] = $request->file('id_document_back_file')?->store('id-documents', 'public') ?? ($data['id_document_back_file'] ?? null);
+        $existingProfile = $request->user()->jobSeekerProfile;
+        $data['id_document_front_file'] = $request->file('id_document_front_file')?->store('id-documents', 'public') ?? $existingProfile?->id_document_front_file;
+        $data['id_document_back_file'] = $request->file('id_document_back_file')?->store('id-documents', 'public') ?? $existingProfile?->id_document_back_file;
         if ($photo = $request->file('profile_photo')) {
             [$data['profile_photo'], $data['profile_photo_thumbnail']] = $this->storePassportPhoto($photo);
         }
