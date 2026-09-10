@@ -4,13 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCatalogRequest;
-use App\Http\Requests\StoreUgandaLocationRequest;
 use App\Models\JobCategory;
 use App\Models\Language;
 use App\Models\Religion;
 use App\Models\UgandaLocation;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 
 class CatalogController extends Controller
@@ -44,41 +42,6 @@ class CatalogController extends Controller
         ]);
     }
 
-    public function locations(Request $request)
-    {
-        $data = $this->ugandaLocationData();
-
-        $districtIds = $this->matchingIds($data['districts'], $request->query('district'));
-        $counties = $request->filled('district')
-            ? $this->filterByParent($data['counties'], 'district', $districtIds)
-            : [];
-
-        $countyIds = $this->matchingIds($counties, $request->query('county'));
-        $subcounties = $request->filled('county')
-            ? $this->filterByParent($data['subcounties'], 'county', $countyIds)
-            : [];
-
-        $subcountyIds = $this->matchingIds($subcounties, $request->query('subcounty'));
-        $parishes = $request->filled('subcounty')
-            ? $this->filterByParent($data['parishes'], 'subcounty', $subcountyIds)
-            : [];
-
-        $parishIds = $this->matchingIds($parishes, $request->query('parish'));
-        $villages = $request->filled('parish')
-            ? $this->filterByParent($data['villages'], 'parish', $parishIds)
-            : [];
-
-        return response()->json([
-            'data' => [
-                'districts' => $this->names($data['districts']),
-                'counties' => $this->names($counties),
-                'subcounties' => $this->names($subcounties),
-                'parishes' => $this->names($parishes),
-                'villages' => $this->names($villages),
-            ],
-        ]);
-    }
-
     public function adminIndex()
     {
         return response()->json([
@@ -86,7 +49,6 @@ class CatalogController extends Controller
                 'job_categories' => JobCategory::query()->orderBy('name')->get(),
                 'languages' => Language::query()->orderBy('name')->get(),
                 'religions' => Religion::query()->orderBy('name')->get(),
-                'locations' => UgandaLocation::query()->orderBy('district')->orderBy('county')->orderBy('subcounty')->paginate(50),
             ],
         ]);
     }
@@ -104,16 +66,6 @@ class CatalogController extends Controller
     public function storeReligion(StoreCatalogRequest $request)
     {
         return $this->storeCatalog(Religion::class, $request);
-    }
-
-    public function storeLocation(StoreUgandaLocationRequest $request)
-    {
-        $location = UgandaLocation::query()->updateOrCreate(
-            $request->safe()->only(['district', 'county', 'subcounty', 'parish', 'village']),
-            $request->validated()
-        );
-
-        return response()->json(['message' => 'Location saved.', 'data' => $location], 201);
     }
 
     /**
@@ -263,5 +215,4 @@ class CatalogController extends Controller
             ->values()
             ->all();
     }
-
 }

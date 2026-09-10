@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\PublicDiscoveryController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\SmsManagementController;
 use App\Http\Controllers\Api\WorkerController;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
 
 Route::post('register', [AuthController::class, 'register']);
@@ -30,7 +31,41 @@ Route::get('public/job-seekers/{profile}/thumbnail', [PublicDiscoveryController:
     ->middleware('throttle:120,1');
 Route::get('subscription-packages', [SubscriptionController::class, 'packages']);
 Route::get('catalogs', [CatalogController::class, 'index']);
-Route::get('locations/uganda', [CatalogController::class, 'locations']);
+Route::get('locations/uganda', function () {
+    $basePath = storage_path('app/public/ugandaData');
+    $load = fn (string $file) => File::exists("{$basePath}/{$file}")
+        ? (json_decode(File::get("{$basePath}/{$file}"), true) ?: [])
+        : [];
+    $districts = $load('districts.json');
+    $counties = $load('counties.json');
+    $subcounties = $load('sub_counties.json');
+    $parishes = $load('parishes.json');
+    $villages = $load('villages.json');
+    $matchingIds = fn (array $items, ?string $name) => $name
+        ? collect($items)->filter(fn (array $item) => strcasecmp($item['name'] ?? '', $name) === 0)->pluck('id')->all()
+        : null;
+    $filterByParent = fn (array $items, string $key, ?array $ids) => $ids === null
+        ? $items
+        : array_values(array_filter($items, fn (array $item) => in_array((string) ($item[$key] ?? ''), array_map('strval', $ids), true)));
+    $names = fn (array $items) => collect($items)->pluck('name')->filter()->unique()->sort()->values()->all();
+
+    $districtIds = $matchingIds($districts, request('district'));
+    $filteredCounties = request()->filled('district') ? $filterByParent($counties, 'district', $districtIds) : [];
+    $countyIds = $matchingIds($filteredCounties, request('county'));
+    $filteredSubcounties = request()->filled('county') ? $filterByParent($subcounties, 'county', $countyIds) : [];
+    $subcountyIds = $matchingIds($filteredSubcounties, request('subcounty'));
+    $filteredParishes = request()->filled('subcounty') ? $filterByParent($parishes, 'subcounty', $subcountyIds) : [];
+    $parishIds = $matchingIds($filteredParishes, request('parish'));
+    $filteredVillages = request()->filled('parish') ? $filterByParent($villages, 'parish', $parishIds) : [];
+
+    return response()->json(['data' => [
+        'districts' => $names($districts),
+        'counties' => $names($filteredCounties),
+        'subcounties' => $names($filteredSubcounties),
+        'parishes' => $names($filteredParishes),
+        'villages' => $names($filteredVillages),
+    ]]);
+});
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('logout', [AuthController::class, 'logout']);
@@ -117,7 +152,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('catalogs/job-categories', [CatalogController::class, 'storeJobCategory'])->middleware('permission:manage_catalogs,create_catalogs');
         Route::post('catalogs/languages', [CatalogController::class, 'storeLanguage'])->middleware('permission:manage_catalogs,create_catalogs');
         Route::post('catalogs/religions', [CatalogController::class, 'storeReligion'])->middleware('permission:manage_catalogs,create_catalogs');
-        Route::post('catalogs/locations', [CatalogController::class, 'storeLocation'])->middleware('permission:manage_catalogs,create_catalogs');
 
         Route::middleware('permission:approve_job_seekers')->group(function () {
             Route::get('job-seeker-profiles/pending', [AdminController::class, 'pendingJobSeekers']);
