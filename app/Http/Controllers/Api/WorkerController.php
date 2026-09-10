@@ -6,12 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreWorkerOrderRequest;
 use App\Models\JobSeekerProfile;
 use App\Models\WorkerOrder;
+use App\Services\AdminApprovalNotifier;
 use App\Support\NotifiesUsers;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class WorkerController extends Controller
 {
     use NotifiesUsers;
+
+    public function __construct(private readonly AdminApprovalNotifier $adminApprovalNotifier) {}
 
     public function index(Request $request)
     {
@@ -53,30 +57,47 @@ class WorkerController extends Controller
 
     public function storeOrder(StoreWorkerOrderRequest $request)
     {
-        $worker = JobSeekerProfile::query()
-            ->publiclyVisible()
-            ->findOrFail($request->validated('job_seeker_profile_id'));
+        $data = $request->validated();
+        $workerIds = $data['job_seeker_profile_ids'] ?? [$data['job_seeker_profile_id']];
+        $workers = JobSeekerProfile::query()->with('user')->publiclyVisible()->whereIn('id', $workerIds)->get();
 
-        if (WorkerOrder::query()
-            ->where('employer_id', $request->user()->id)
-            ->where('job_seeker_profile_id', $worker->id)
-            ->where('status', 'pending')
-            ->exists()) {
-            return response()->json(['message' => 'You already have a pending request for this job seeker.'], 422);
+        if ($workers->count() !== count($workerIds)) {
+            return response()->json(['message' => 'One or more selected workers are no longer available.'], 422);
         }
-        $order = WorkerOrder::query()->create($request->validated() + [
-            'employer_id' => $request->user()->id,
-            'status' => 'pending',
-        ]);
 
-        $this->notifyUser(
-            $worker->user,
-            'worker_request',
-            'New worker request submitted',
-            "{$request->user()->name} requested to match with you. Admin review is pending."
+        $duplicate = WorkerOrder::query()
+            ->where('employer_id', $request->user()->id)
+            ->whereIn('job_seeker_profile_id', $workerIds)
+            ->where('status', 'pending')
+            ->exists();
+        if ($duplicate) {
+            return response()->json(['message' => 'One or more selected workers already have a pending request.'], 422);
+        }
+
+        $orders = DB::transaction(function () use ($data, $workerIds, $request) {
+            return collect($workerIds)->map(fn ($workerId) => WorkerOrder::query()->create([
+                'employer_id' => $request->user()->id,
+                'job_seeker_profile_id' => $workerId,
+                'salary_offered' => $data['salary_offered'],
+                'job_location' => $data['job_location'],
+                'working_terms' => $data['working_terms'],
+                'allowances' => $data['allowances'] ?? null,
+                'job_description' => $data['job_description'],
+                'start_date' => $data['start_date'],
+                'status' => 'pending',
+            ]));
+        });
+
+        foreach ($workers as $worker) {
+            $this->notifyUser($worker->user, 'worker_request', 'New worker request submitted', "{$request->user()->name} requested to match with you. Admin review is pending.");
+        }
+
+        $this->adminApprovalNotifier->notifyAdmins(
+            'New worker order awaiting approval',
+            "A worker order request from {$request->user()->name} is awaiting administrative approval."
         );
 
-        return response()->json(['message' => 'Worker request submitted for admin review.', 'data' => $order], 201);
+        return response()->json(['message' => count($workerIds) === 1 ? 'Worker request submitted for admin review.' : count($workerIds).' worker requests submitted for admin review.', 'data' => $orders], 201);
     }
 
     public function orders(Request $request)

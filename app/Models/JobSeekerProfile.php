@@ -6,10 +6,17 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Facades\Storage;
 
 class JobSeekerProfile extends Model
 {
-    protected $appends = ['profile_photo_thumbnail_url'];
+    protected $appends = [
+        'profile_photo_thumbnail_url',
+        'profile_photo_url',
+        'id_document_file_url',
+        'id_document_front_file_url',
+        'id_document_back_file_url',
+    ];
 
     protected $fillable = [
         'user_id',
@@ -89,6 +96,34 @@ class JobSeekerProfile extends Model
         return $this->status === 'approved'
             && $this->is_available
             && $this->user?->status === 'approved';
+    }
+
+    public function getProfilePhotoUrlAttribute(): ?string
+    {
+        return $this->profile_photo && Storage::disk('public')->exists($this->profile_photo)
+            ? Storage::disk('public')->url($this->profile_photo)
+            : null;
+    }
+
+    public function getIdDocumentFileUrlAttribute(): ?string
+    {
+        return $this->id_document_file && Storage::disk('public')->exists($this->id_document_file)
+            ? Storage::disk('public')->url($this->id_document_file)
+            : null;
+    }
+
+    public function getIdDocumentFrontFileUrlAttribute(): ?string
+    {
+        return $this->id_document_front_file && Storage::disk('public')->exists($this->id_document_front_file)
+            ? Storage::disk('public')->url($this->id_document_front_file)
+            : null;
+    }
+
+    public function getIdDocumentBackFileUrlAttribute(): ?string
+    {
+        return $this->id_document_back_file && Storage::disk('public')->exists($this->id_document_back_file)
+            ? Storage::disk('public')->url($this->id_document_back_file)
+            : null;
     }
 
     public function getProfilePhotoThumbnailUrlAttribute(): ?string

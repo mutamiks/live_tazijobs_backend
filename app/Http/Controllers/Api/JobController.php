@@ -6,11 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreJobRequest;
 use App\Models\Job;
 use App\Models\User;
+use App\Services\AdminApprovalNotifier;
 use App\Services\JobSeekerJobNotifier;
 use Illuminate\Http\Request;
 
 class JobController extends Controller
 {
+    public function __construct(private readonly AdminApprovalNotifier $adminApprovalNotifier) {}
+
     public function index(Request $request)
     {
         $perPage = (int) $request->integer('per_page', 50);
@@ -70,6 +73,11 @@ class JobController extends Controller
         $data['location'] = $data['location'] ?? $this->formatLocation($data);
 
         $job = $request->user()->jobPosts()->create($data + ['status' => 'pending']);
+
+        $this->adminApprovalNotifier->notifyAdmins(
+            'New job awaiting approval',
+            "A new job titled {$job->title} is awaiting administrative approval."
+        );
 
         return response()->json(['message' => 'Job submitted for approval.', 'data' => $job], 201);
     }

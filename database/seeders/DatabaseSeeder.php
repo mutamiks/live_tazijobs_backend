@@ -61,7 +61,7 @@ class DatabaseSeeder extends Seeder
             Language::query()->updateOrCreate(['name' => $name], ['is_active' => true]);
         }
 
-        foreach (['Christian', 'Muslim', 'Other'] as $name) {
+        foreach (['Muslim', 'Other'] as $name) {
             Religion::query()->updateOrCreate(['name' => $name], ['is_active' => true]);
         }
 
@@ -78,7 +78,7 @@ class DatabaseSeeder extends Seeder
         $jobSeekers = [
             [
                 'user' => ['name' => 'Amina Namara', 'email' => 'amina.jobseeker@example.com', 'phone' => '+256701111111', 'status' => 'approved'],
-                'profile' => ['full_name' => 'Amina Namara', 'gender' => 'female', 'date_of_birth' => '1998-04-18', 'location' => 'Kampala, Kampala Central', 'district' => 'Kampala', 'county' => 'Kampala Central', 'subcounty' => 'Central', 'parish' => 'Nakasero', 'village' => 'Nakasero I', 'languages' => ['English', 'Luganda'], 'religion' => 'Christian', 'phone' => '+256701111111', 'education_level' => 'Bachelor of Information Technology', 'skills' => ['Laravel', 'React', 'Customer support'], 'experience_years' => 3, 'bio' => 'API developer and support specialist.', 'work_experience' => 'Three years building APIs and supporting customers.', 'preferred_job_categories' => ['Technology', 'Customer support'], 'terms_accepted' => true, 'is_available' => true, 'status' => 'approved'],
+                'profile' => ['full_name' => 'Amina Namara', 'gender' => 'female', 'date_of_birth' => '1998-04-18', 'location' => 'Kampala, Kampala Central', 'district' => 'Kampala', 'county' => 'Kampala Central', 'subcounty' => 'Central', 'parish' => 'Nakasero', 'village' => 'Nakasero I', 'languages' => ['English', 'Luganda'], 'religion' => 'Other', 'phone' => '+256701111111', 'education_level' => 'Bachelor of Information Technology', 'skills' => ['Laravel', 'React', 'Customer support'], 'experience_years' => 3, 'bio' => 'API developer and support specialist.', 'work_experience' => 'Three years building APIs and supporting customers.', 'preferred_job_categories' => ['Technology', 'Customer support'], 'terms_accepted' => true, 'is_available' => true, 'status' => 'approved'],
             ],
             [
                 'user' => ['name' => 'Brian Okello', 'email' => 'brian.jobseeker@example.com', 'phone' => '+256702222222', 'status' => 'pending'],
@@ -86,7 +86,7 @@ class DatabaseSeeder extends Seeder
             ],
             [
                 'user' => ['name' => 'Clare Akello', 'email' => 'clare.jobseeker@example.com', 'phone' => '+256703333333', 'status' => 'rejected'],
-                'profile' => ['full_name' => 'Clare Akello', 'gender' => 'female', 'date_of_birth' => '2000-01-12', 'location' => 'Jinja, Jinja City', 'district' => 'Jinja', 'county' => 'Jinja City', 'subcounty' => 'Walukuba', 'parish' => 'Walukuba East', 'village' => 'Walukuba Central', 'languages' => ['English', 'Lusoga'], 'religion' => 'Christian', 'phone' => '+256703333333', 'education_level' => 'Certificate in Accounting', 'skills' => ['Bookkeeping'], 'experience_years' => 1, 'bio' => 'Entry-level accounts assistant.', 'work_experience' => 'One year supporting small business accounts.', 'preferred_job_categories' => ['Accounting'], 'terms_accepted' => true, 'is_available' => false, 'status' => 'rejected', 'rejection_reason' => 'Please upload a clearer CV.'],
+                'profile' => ['full_name' => 'Clare Akello', 'gender' => 'female', 'date_of_birth' => '2000-01-12', 'location' => 'Jinja, Jinja City', 'district' => 'Jinja', 'county' => 'Jinja City', 'subcounty' => 'Walukuba', 'parish' => 'Walukuba East', 'village' => 'Walukuba Central', 'languages' => ['English', 'Lusoga'], 'religion' => 'Other', 'phone' => '+256703333333', 'education_level' => 'Certificate in Accounting', 'skills' => ['Bookkeeping'], 'experience_years' => 1, 'bio' => 'Entry-level accounts assistant.', 'work_experience' => 'One year supporting small business accounts.', 'preferred_job_categories' => ['Accounting'], 'terms_accepted' => true, 'is_available' => false, 'status' => 'rejected', 'rejection_reason' => 'Please upload a clearer CV.'],
             ],
         ];
 

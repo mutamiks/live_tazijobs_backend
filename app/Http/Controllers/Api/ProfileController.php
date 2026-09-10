@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreEmployerProfileRequest;
 use App\Http\Requests\StoreJobSeekerProfileRequest;
+use App\Services\AdminApprovalNotifier;
 use App\Services\SmsService;
 use App\Support\NotifiesUsers;
 use Illuminate\Http\Request;
@@ -16,6 +17,8 @@ class ProfileController extends Controller
 {
     use NotifiesUsers;
 
+    public function __construct(private readonly AdminApprovalNotifier $adminApprovalNotifier) {}
+
     public function submitJobSeeker(StoreJobSeekerProfileRequest $request)
     {
         $data = $request->validated();
@@ -25,8 +28,9 @@ class ProfileController extends Controller
         $data['cv_file'] = $request->file('cv_file')?->store('job-seeker-cvs', 'public') ?? ($data['cv_file'] ?? null);
         $data['lc1_letter_file'] = $request->file('lc1_letter_file')?->store('lc1-letters', 'public') ?? ($data['lc1_letter_file'] ?? null);
         $data['id_document_file'] = $request->file('id_document_file')?->store('id-documents', 'public') ?? ($data['id_document_file'] ?? null);
-        $data['id_document_front_file'] = $request->file('id_document_front_file')?->store('id-documents', 'public') ?? ($data['id_document_front_file'] ?? null);
-        $data['id_document_back_file'] = $request->file('id_document_back_file')?->store('id-documents', 'public') ?? ($data['id_document_back_file'] ?? null);
+        $existingProfile = $request->user()->jobSeekerProfile;
+        $data['id_document_front_file'] = $request->file('id_document_front_file')?->store('id-documents', 'public') ?? $existingProfile?->id_document_front_file;
+        $data['id_document_back_file'] = $request->file('id_document_back_file')?->store('id-documents', 'public') ?? $existingProfile?->id_document_back_file;
         if ($photo = $request->file('profile_photo')) {
             [$data['profile_photo'], $data['profile_photo_thumbnail']] = $this->storePassportPhoto($photo);
         }
@@ -51,6 +55,11 @@ class ProfileController extends Controller
             'Worker profile under review',
             'Your TaziJobs worker account has been created and is under admin review.',
             'TaziJobs: Your worker account was created and is under review.'
+        );
+
+        $this->adminApprovalNotifier->notifyAdmins(
+            'New job seeker profile awaiting approval',
+            "A job seeker profile named {$request->user()->name} is awaiting administrative approval."
         );
 
         return response()->json(['message' => 'Job seeker profile submitted.', 'data' => $profile], 201);
@@ -85,6 +94,11 @@ class ProfileController extends Controller
             'Employer account under review',
             'Your TaziJobs employer account has been created and is under admin review.',
             'TaziJobs: Your employer account was created and is under review.'
+        );
+
+        $this->adminApprovalNotifier->notifyAdmins(
+            'New employer profile awaiting approval',
+            "An employer profile named {$request->user()->name} is awaiting administrative approval."
         );
 
         return response()->json(['message' => 'Employer profile submitted.', 'data' => $profile], 201);
