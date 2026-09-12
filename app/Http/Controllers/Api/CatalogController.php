@@ -37,7 +37,11 @@ class CatalogController extends Controller
             'data' => [
                 'job_categories' => JobCategory::query()->where('is_active', true)->orderBy('name')->get(),
                 'languages' => Language::query()->where('is_active', true)->orderBy('name')->get(),
-                'religions' => Religion::query()->where('is_active', true)->orderBy('name')->get(),
+                'religions' => Religion::query()
+                    ->where('is_active', true)
+                    ->whereRaw('LOWER(name) != ?', ['christian'])
+                    ->orderBy('name')
+                    ->get(),
             ],
         ]);
     }
@@ -48,7 +52,10 @@ class CatalogController extends Controller
             'data' => [
                 'job_categories' => JobCategory::query()->orderBy('name')->get(),
                 'languages' => Language::query()->orderBy('name')->get(),
-                'religions' => Religion::query()->orderBy('name')->get(),
+                'religions' => Religion::query()
+                    ->whereRaw('LOWER(name) != ?', ['christian'])
+                    ->orderBy('name')
+                    ->get(),
             ],
         ]);
     }
@@ -65,6 +72,8 @@ class CatalogController extends Controller
 
     public function storeReligion(StoreCatalogRequest $request)
     {
+        abort_if(strcasecmp($request->string('name')->toString(), 'christian') === 0, 422, 'This religion is not available.');
+
         return $this->storeCatalog(Religion::class, $request);
     }
 
