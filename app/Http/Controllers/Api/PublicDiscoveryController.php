@@ -61,6 +61,26 @@ class PublicDiscoveryController extends Controller
         );
     }
 
+    public function photo(JobSeekerProfile $profile)
+    {
+        abort_unless(
+            $profile->isPubliclyVisible()
+            && ($profile->profile_photo || $profile->profile_photo_thumbnail),
+            404,
+        );
+
+        $path = collect([$profile->profile_photo, $profile->profile_photo_thumbnail])
+            ->first(fn (?string $path) => $path && Storage::disk('public')->exists($path));
+
+        abort_unless($path, 404);
+
+        return Storage::disk('public')->response(
+            $path,
+            null,
+            ['Cache-Control' => 'public, max-age=86400'],
+        );
+    }
+
     public function job(int $job)
     {
         $job = Job::query()
@@ -155,7 +175,7 @@ class PublicDiscoveryController extends Controller
         return JobSeekerProfile::query()
             ->select([
                 'id', 'full_name', 'job_title', 'district', 'skills',
-                'experience_years', 'profile_photo_thumbnail', 'created_at',
+                'experience_years', 'profile_photo', 'profile_photo_thumbnail', 'created_at',
             ])
             ->publiclyVisible()
             ->when($filters['worker_title'] ?? null, fn ($query, string $title) => $query->where('job_title', 'like', "%{$title}%"))
@@ -181,8 +201,11 @@ class PublicDiscoveryController extends Controller
                 'district' => $profile->district,
                 'skills' => array_slice($profile->skills ?? [], 0, 3),
                 'experience_years' => $profile->experience_years,
-                'thumbnail_url' => $profile->profile_photo_thumbnail
+                'thumbnail_url' => ($profile->profile_photo_thumbnail || $profile->profile_photo)
                     ? route('public.job-seeker-thumbnail', $profile)
+                    : null,
+                'photo_url' => ($profile->profile_photo || $profile->profile_photo_thumbnail)
+                    ? route('public.job-seeker-photo', $profile)
                     : null,
             ]);
     }
