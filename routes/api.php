@@ -29,6 +29,9 @@ Route::post('public/worker-contacts', [PublicDiscoveryController::class, 'storeW
 Route::get('public/job-seekers/{profile}/thumbnail', [PublicDiscoveryController::class, 'thumbnail'])
     ->name('public.job-seeker-thumbnail')
     ->middleware('throttle:120,1');
+Route::get('public/job-seekers/{profile}/photo', [PublicDiscoveryController::class, 'photo'])
+    ->name('public.job-seeker-photo')
+    ->middleware('throttle:120,1');
 Route::get('subscription-packages', [SubscriptionController::class, 'packages']);
 Route::get('catalogs', [CatalogController::class, 'index']);
 Route::get('locations/uganda', function () {
