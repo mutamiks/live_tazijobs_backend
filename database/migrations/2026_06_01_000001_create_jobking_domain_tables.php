@@ -58,6 +58,7 @@ return new class extends Migration
             $table->string('job_type')->index();
             $table->decimal('salary_min', 12, 2)->nullable();
             $table->decimal('salary_max', 12, 2)->nullable();
+            $table->string('contact_number')->nullable();
             $table->date('deadline')->nullable();
             $table->string('status')->default('pending')->index();
             $table->text('rejection_reason')->nullable();
