@@ -131,6 +131,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('users/{user}/reactivate', [AdminController::class, 'reactivateUser'])->middleware('permission:manage_users,edit_users,suspend_users');
         Route::post('users/{user}/subscription', [AdminController::class, 'assignSubscription'])->middleware('permission:manage_users,edit_users');
         Route::post('users/{user}/invoices', [AdminController::class, 'createInvoice'])->middleware('permission:manage_invoices,create_invoices,manage_users');
+        Route::get('/subscription-payments', [SubscriptionController::class, 'adminIndex'])->middleware('permission:manage_invoices,view_invoices');
+        Route::post('/subscription-payments/manual', [SubscriptionController::class, 'storeManualPayment'])->middleware('permission:manage_invoices,create_invoices');
+        Route::post('/subscription-payments/mobile-money', [SubscriptionController::class, 'storeAdminMobileMoneyPayment'])->middleware('permission:manage_invoices,create_invoices');
         Route::get('invoices', [AdminController::class, 'invoices'])->middleware('permission:manage_invoices,view_invoices,manage_users');
         Route::patch('invoices/{payment}/pay', [AdminController::class, 'payInvoice'])->middleware('permission:manage_invoices,create_invoices,manage_users');
         Route::get('tickets', [AdminTicketController::class, 'index'])->middleware('permission:manage_tickets,view_tickets');
@@ -160,6 +163,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('job-seeker-profiles/pending', [AdminController::class, 'pendingJobSeekers']);
             Route::get('job-seeker-profiles/{profile}', [AdminController::class, 'showJobSeeker']);
             Route::patch('job-seeker-profiles/{profile}/decision', [AdminController::class, 'decideJobSeeker']);
+            Route::delete('job-seeker-profiles/{profile}', [AdminController::class, 'deleteJobSeeker'])->middleware('permission:approve_job_seekers,manage_users');
         });
 
         Route::middleware('permission:approve_employers')->group(function () {

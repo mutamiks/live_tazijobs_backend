@@ -29,6 +29,7 @@ class Job extends Model
         'salary_max',
         'allowances',
         'deadline',
+        'contact_phone',
         'status',
         'rejection_reason',
         'approved_by',

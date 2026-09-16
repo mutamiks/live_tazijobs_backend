@@ -20,6 +20,7 @@ use App\Support\NotifiesUsers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use App\Services\SmsService;
+use App\Services\SubscriptionPaymentProcessor;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -752,7 +753,10 @@ class AdminController extends Controller
         abort_if(blank($payment->invoice_number), 404, 'Invoice not found.');
 
         $data = $request->validate([
-            'phone' => ['required', 'regex:/^(?:\+?256|0)?7\d{8}$/'],
+            'phone' => ['required_if:payment_method,mobile_money_API', 'nullable', 'regex:/^(?:\+?256|0)?7\d{8}$/'],
+            'payment_method' => ['sometimes', Rule::in(['mobile_money_API', 'bank_transfer', 'cash_payment'])],
+            'payment_date' => ['required_if:payment_method,bank_transfer,cash_payment', 'nullable', 'date'],
+            'payment_reason' => ['required_if:payment_method,bank_transfer,cash_payment', 'nullable', 'string', 'max:1000'],
             'admin_notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -760,6 +764,26 @@ class AdminController extends Controller
             return response()->json([
                 'message' => 'This invoice is already paid.',
                 'data' => $payment->load(['user.jobSeekerProfile', 'package', 'job.employer.employerProfile', 'creator:id,name']),
+            ]);
+        }
+
+        $paymentMethod = $data['payment_method'] ?? 'mobile_money_API';
+
+        if ($paymentMethod !== 'mobile_money_API') {
+            $payment->forceFill([
+            'payment_method' => $paymentMethod,
+                'transaction_reference' => 'OFF-'.str()->upper(str()->random(12)),
+                'payment_date' => $data['payment_date'],
+                'payment_reason' => $data['payment_reason'],
+                'status' => 'successful',
+                'status_message' => 'Offline payment recorded by admin.',
+            ])->save();
+
+            $updated = app(SubscriptionPaymentProcessor::class)->activate($payment);
+
+            return response()->json([
+                'message' => 'Offline payment recorded and subscription activated.',
+                'data' => $updated->load(['user.jobSeekerProfile', 'package', 'job.employer.employerProfile', 'creator:id,name']),
             ]);
         }
 
@@ -777,7 +801,9 @@ class AdminController extends Controller
             }
 
             $payment->update([
+                'payment_method' => $paymentMethod,
                 'phone' => $phone,
+                'payment_date' => now()->toDateString(),
                 'status' => 'pending',
                 'transaction_reference' => $provider['TransactionReference'] ?? null,
                 'status_message' => $provider['StatusMessage'] ?? 'Awaiting confirmation on the phone.',
@@ -827,6 +853,15 @@ class AdminController extends Controller
     public function decideJobSeeker(ApprovalDecisionRequest $request, JobSeekerProfile $profile)
     {
         return $this->decide($request, $profile, $profile->user, 'job_seeker_profile', 'Job seeker profile');
+    }
+
+    public function deleteJobSeeker(JobSeekerProfile $profile)
+    {
+        abort_if($profile->status === 'approved', 422, 'Approved job seekers cannot be permanently deleted.');
+
+        $profile->user()->delete();
+
+        return response()->json(['message' => 'Job seeker application permanently deleted.']);
     }
 
     public function pendingEmployers(Request $request)

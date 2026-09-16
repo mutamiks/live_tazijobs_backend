@@ -19,16 +19,25 @@ class WorkerController extends Controller
 
     public function index(Request $request)
     {
-        $workers = JobSeekerProfile::query()
+        $perPage = max(1, min((int) $request->integer('per_page', 20), 100));
+        $query = JobSeekerProfile::query()
             ->with('user')
-            ->publiclyVisible()
+            ->where('status', 'approved')
+            ->whereHas('user', fn ($query) => $query->where('role', 'job_seeker')->where('status', 'approved'))
             ->when($request->query('search'), function ($query, string $search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('full_name', 'like', "%{$search}%")
+                        ->orWhere('job_title', 'like', "%{$search}%")
                         ->orWhere('bio', 'like', "%{$search}%")
                         ->orWhere('work_experience', 'like', "%{$search}%")
                         ->orWhere('cv_file', 'like', "%{$search}%")
-                        ->orWhere('skills', 'like', "%{$search}%");
+                        ->orWhere('skills', 'like', "%{$search}%")
+                        ->orWhere('preferred_job_categories', 'like', "%{$search}%")
+                        ->orWhere('district', 'like', "%{$search}%")
+                        ->orWhere('county', 'like', "%{$search}%")
+                        ->orWhere('subcounty', 'like', "%{$search}%")
+                        ->orWhere('parish', 'like', "%{$search}%")
+                        ->orWhere('village', 'like', "%{$search}%");
                 });
             })
             ->when($request->query('district'), fn ($query, string $district) => $query->where('district', 'like', "%{$district}%"))
@@ -40,8 +49,11 @@ class WorkerController extends Controller
             ->when($request->query('language'), fn ($query, string $language) => $query->where('languages', 'like', "%{$language}%"))
             ->when($request->query('job_category'), fn ($query, string $category) => $query->where('preferred_job_categories', 'like', "%{$category}%"))
             ->when($request->query('experience_years'), fn ($query, string $years) => $query->where('experience_years', '>=', $years))
-            ->latest()
-            ->paginate(20);
+            ->latest();
+
+        $workers = $request->boolean('all')
+            ? $query->get()
+            : $query->paginate($perPage);
 
         return response()->json(['data' => $workers]);
     }
