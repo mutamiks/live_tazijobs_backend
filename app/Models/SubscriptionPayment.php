@@ -24,6 +24,11 @@ class SubscriptionPayment extends Model
         'status_message',
         'processing_attempts',
         'last_checked_at',
+        'payment_method',     
+        'reference_number',   
+        'payment_date',
+        'payment_reason',
+        'receipt_file', 
     ];
 
     protected function casts(): array
@@ -32,6 +37,7 @@ class SubscriptionPayment extends Model
             'amount' => 'decimal:2',
             'processing_attempts' => 'integer',
             'last_checked_at' => 'datetime',
+            'payment_date' => 'date',
         ];
     }
 

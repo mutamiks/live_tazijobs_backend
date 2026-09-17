@@ -58,7 +58,7 @@ class JobController extends Controller
             ->latest()
             ->paginate($perPage);
 
-        $jobs->getCollection()->transform(fn (Job $job) => $this->publicJobPayload($job));
+        $jobs->getCollection()->transform(fn (Job $job) => $this->publicJobPayload($job,$request));
 
         return response()->json(['data' => $jobs]);
     }
@@ -138,7 +138,7 @@ class JobController extends Controller
             ->latest()
             ->paginate($perPage);
 
-        $jobs->getCollection()->transform(fn (Job $job) => $this->publicJobPayload($job));
+        $jobs->getCollection()->transform(fn (Job $job) => $this->publicJobPayload($job, $request));
 
         return response()->json(['data' => $jobs]);
     }
@@ -187,14 +187,17 @@ class JobController extends Controller
             'data' => $job->fresh(),
         ]);
     }
-    private function publicJobPayload(Job $job): array
-    {
-        $payload = $job->toArray();
-        unset($payload['subcounty'], $payload['parish'], $payload['village']);
+    private function publicJobPayload(Job $job, Request $request): array
+{
+    $payload = $job->toArray();
 
-        if (isset($payload['employer'])) {
-            unset($payload['employer']['phone']);
+    // Check if the logged-in user is an admin or employer
+    $showPhone = $request->user() && $request->user()->canSeeContactDetails();
 
+    if (!$showPhone) {
+        unset($payload['contact_phone']); // Hide job phone
+        
+        // Hide company profile phone if nested in the response
             if (isset($payload['employer']['employer_profile'])) {
                 unset(
                     $payload['employer']['employer_profile']['company_phone'],

@@ -44,6 +44,8 @@ class StoreJobRequest extends FormRequest
             'allowances.items.*.type' => ['required_with:allowances.items', Rule::in(self::ALLOWANCE_TYPES)],
             'allowances.items.*.amount' => ['nullable', 'numeric', 'min:0'],
             'deadline' => ['nullable', 'date', 'after_or_equal:today'],
+            'contact_phone' => ['nullable', 'string', 'max:20'],
+           
         ];
     }
 }

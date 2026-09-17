@@ -62,6 +62,41 @@ class User extends Authenticatable
         ];
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Role Helper Methods
+    |--------------------------------------------------------------------------
+    */
+
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    public function isEmployer(): bool
+    {
+        return $this->role === 'employer';
+    }
+
+    public function isJobSeeker(): bool
+    {
+        return $this->role === 'job_seeker'; // Adjust string if your database role value uses a hyphen or capital letter
+    }
+
+    /**
+     * Checks if the user is authorized to see restricted phone/contact details.
+     */
+    public function canSeeContactDetails(): bool
+    {
+        return $this->isAdmin() || $this->isEmployer();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Relationships
+    |--------------------------------------------------------------------------
+    */
+
     public function jobSeekerProfile(): HasOne
     {
         return $this->hasOne(JobSeekerProfile::class);
@@ -109,6 +144,12 @@ class User extends Authenticatable
             ->latestOfMany();
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Accessors & Permissions Logic
+    |--------------------------------------------------------------------------
+    */
+
     public function getPermissionsAttribute(): array
     {
         if ($this->role === 'admin' && $this->adminRole) {
@@ -120,7 +161,7 @@ class User extends Authenticatable
 
     public function getIsAdminAttribute(): bool
     {
-        return $this->role === 'admin';
+        return $this->isAdmin();
     }
 
     public function hasPermission(string $permission): bool
