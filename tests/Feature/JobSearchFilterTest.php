@@ -14,6 +14,28 @@ class JobSearchFilterTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_job_seekers_can_view_an_approved_job(): void
+    {
+        $employer = User::factory()->create(['role' => 'employer', 'status' => 'approved']);
+        $jobSeeker = User::factory()->create(['role' => 'job_seeker']);
+        $job = Job::query()->create([
+            'employer_id' => $employer->id,
+            'title' => 'Laravel Developer',
+            'description' => 'Build APIs.',
+            'location' => 'Kampala',
+            'district' => 'Kampala',
+            'job_type' => 'full_time',
+            'status' => 'approved',
+        ]);
+
+        Sanctum::actingAs($jobSeeker);
+
+        $this->getJson('/api/jobs/'.$job->id)
+            ->assertOk()
+            ->assertJsonPath('data.id', $job->id)
+            ->assertJsonPath('data.title', 'Laravel Developer');
+    }
+
     public function test_job_seekers_can_filter_approved_jobs(): void
     {
         $employer = User::factory()->create(['role' => 'employer']);

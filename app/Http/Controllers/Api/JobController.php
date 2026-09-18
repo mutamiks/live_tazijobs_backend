@@ -149,7 +149,7 @@ class JobController extends Controller
             return response()->json(['message' => 'Job not found.'], 404);
         }
 
-        return response()->json(['data' => $this->publicJobPayload($job->load(['category', 'employer.employerProfile']))]);
+        return response()->json(['data' => $this->publicJobPayload($job->load(['category', 'employer.employerProfile']), $request)]);
     }
 
     public function employerJobs(Request $request)
