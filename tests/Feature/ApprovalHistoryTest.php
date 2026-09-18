@@ -80,6 +80,7 @@ class ApprovalHistoryTest extends TestCase
             'village' => 'Nakasero I',
             'languages' => ['English'],
             'religion' => 'Christian',
+            'education_level' => 'University Level',
             'skills' => ['Laravel', 'React'],
             'experience_years' => 2,
             'terms_accepted' => true,

@@ -101,7 +101,7 @@ class JobSeekerProfile extends Model
     public function getProfilePhotoUrlAttribute(): ?string
     {
         return $this->profile_photo && Storage::disk('public')->exists($this->profile_photo)
-            ? url('storage/'.$this->profile_photo)
+            ? Storage::disk('public')->url($this->profile_photo)
             : null;
     }
 
