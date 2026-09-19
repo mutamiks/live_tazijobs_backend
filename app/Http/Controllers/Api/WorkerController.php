@@ -51,9 +51,18 @@ class WorkerController extends Controller
             ->when($request->query('experience_years'), fn ($query, string $years) => $query->where('experience_years', '>=', $years))
             ->latest();
 
-        $workers = $request->boolean('all')
-            ? $query->get()
-            : $query->paginate($perPage);
+        $classifyWorker = function (JobSeekerProfile $worker) {
+            $worker->setAttribute('classification', $worker->skill_classification);
+
+            return $worker;
+        };
+
+        if ($request->boolean('all')) {
+            $workers = $query->get()->map($classifyWorker);
+        } else {
+            $workers = $query->paginate($perPage);
+            $workers->getCollection()->transform($classifyWorker);
+        }
 
         return response()->json(['data' => $workers]);
     }
