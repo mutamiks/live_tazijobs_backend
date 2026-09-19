@@ -10,12 +10,14 @@ use Illuminate\Support\Facades\Storage;
 
 class JobSeekerProfile extends Model
 {
+     const SKILLED_LEVELS = ['university', 'tertiary', 'diploma', 'degree', 'postgraduate'];
     protected $appends = [
         'profile_photo_thumbnail_url',
         'profile_photo_url',
         'id_document_file_url',
         'id_document_front_file_url',
         'id_document_back_file_url',
+         'skill_classification',
     ];
 
     protected $fillable = [
@@ -68,6 +70,11 @@ class JobSeekerProfile extends Model
         ];
     }
 
+    public function scopeSkilled(Builder $query): Builder
+    {
+        return $query->whereIn('education_level', self::SKILLED_LEVELS);
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -96,6 +103,16 @@ class JobSeekerProfile extends Model
         return $this->status === 'approved'
             && $this->is_available
             && $this->user?->status === 'approved';
+    }
+
+    public function getSkillClassificationAttribute(): string
+    {
+        $educationLevel = strtolower((string) ($this->education_level ?? ''));
+
+        return collect(self::SKILLED_LEVELS)
+            ->contains(fn (string $level) => str_contains($educationLevel, $level))
+            ? 'skilled'
+            : 'unskilled';
     }
 
     public function getProfilePhotoUrlAttribute(): ?string

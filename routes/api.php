@@ -185,6 +185,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('applications', [AdminController::class, 'applications'])->middleware('permission:approve_applications');
         Route::patch('applications/{application}/decision', [AdminController::class, 'decideApplication'])->middleware('permission:approve_applications');
 
+        Route::get('workers-directory', [JobController::class, 'getCategorizedWorkers'])->middleware('permission:search_workers,approve_job_seekers');
         Route::get('worker-orders/pending', [AdminController::class, 'pendingWorkerOrders'])->middleware('permission:approve_worker_orders');
         Route::get('contacted-job-seekers', [AdminController::class, 'contactedJobSeekers'])->middleware('permission:approve_worker_orders');
         Route::patch('worker-orders/{order}/decision', [AdminController::class, 'decideWorkerOrder'])->middleware('permission:approve_worker_orders');

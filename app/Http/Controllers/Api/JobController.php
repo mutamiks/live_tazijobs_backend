@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreJobRequest;
 use App\Models\Job;
+use App\Models\JobSeekerProfile;
 use App\Models\User;
 use App\Services\AdminApprovalNotifier;
 use App\Services\JobSeekerJobNotifier;
@@ -187,6 +188,30 @@ class JobController extends Controller
             'data' => $job->fresh(),
         ]);
     }
+
+    public function getCategorizedWorkers(Request $request)
+    {
+        $profiles = JobSeekerProfile::query()
+            ->with('user')
+            ->publiclyVisible()
+            ->get();
+
+        $classified = $profiles->map(function (JobSeekerProfile $profile) {
+            return array_merge($profile->toArray(), [
+                'classification' => $profile->skill_classification,
+            ]);
+        });
+
+        $skilled = $classified->where('classification', 'skilled')->values();
+        $unskilled = $classified->where('classification', 'unskilled')->values();
+
+        return response()->json([
+            'skilled_workers' => $skilled,
+            'unskilled_workers' => $unskilled,
+        ]);
+    }
+
+
     private function publicJobPayload(Job $job, Request $request): array
 {
     $payload = $job->toArray();
