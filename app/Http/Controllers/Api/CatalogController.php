@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCatalogRequest;
+use App\Http\Requests\UpdateJobCategoryRequest;
 use App\Models\JobCategory;
 use App\Models\Language;
 use App\Models\Religion;
@@ -63,6 +64,13 @@ class CatalogController extends Controller
     public function storeJobCategory(StoreCatalogRequest $request)
     {
         return $this->storeCatalog(JobCategory::class, $request);
+    }
+
+    public function updateJobCategory(UpdateJobCategoryRequest $request, JobCategory $jobCategory)
+    {
+        $jobCategory->update($request->validated());
+
+        return response()->json(['message' => 'Job category updated.', 'data' => $jobCategory->fresh()]);
     }
 
     public function storeLanguage(StoreCatalogRequest $request)

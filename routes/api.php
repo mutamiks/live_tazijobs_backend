@@ -156,6 +156,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('catalogs', [CatalogController::class, 'adminIndex'])->middleware('permission:manage_catalogs,view_catalogs');
         Route::post('catalogs/job-categories', [CatalogController::class, 'storeJobCategory'])->middleware('permission:manage_catalogs,create_catalogs');
+        Route::patch('catalogs/job-categories/{jobCategory}', [CatalogController::class, 'updateJobCategory'])->middleware('permission:manage_catalogs,edit_catalogs');
         Route::post('catalogs/languages', [CatalogController::class, 'storeLanguage'])->middleware('permission:manage_catalogs,create_catalogs');
         Route::post('catalogs/religions', [CatalogController::class, 'storeReligion'])->middleware('permission:manage_catalogs,create_catalogs');
 

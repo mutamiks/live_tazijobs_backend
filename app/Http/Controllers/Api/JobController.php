@@ -23,6 +23,15 @@ class JobController extends Controller
         $jobs = Job::query()
             ->with(['category', 'employer.employerProfile'])
             ->publiclyVisible()
+            ->when($request->user()?->role === 'job_seeker', function ($query) use ($request) {
+                $profile = $request->user()->jobSeekerProfile;
+                if ($profile?->status === 'approved') {
+                    $query->orderByRaw(
+                        'CASE WHEN EXISTS (SELECT 1 FROM job_categories WHERE job_categories.id = jobs.job_category_id AND job_categories.skill_level = ?) THEN 0 ELSE 1 END',
+                        [$profile->skill_classification],
+                    );
+                }
+            })
             ->when($request->query('job_category_id'), fn ($query, string $category) => $query->where('job_category_id', $category))
             ->when($request->query('title'), fn ($query, string $title) => $query->where('title', 'like', "%{$title}%"))
             ->when($request->query('search'), function ($query, string $search) {
@@ -136,6 +145,10 @@ class JobController extends Controller
                 $query->whereHas('category', fn ($query) => $query->whereIn('name', $preferredCategories))
                     ->orWhere('district', $profile->district);
             })
+            ->orderByRaw(
+                'CASE WHEN EXISTS (SELECT 1 FROM job_categories WHERE job_categories.id = jobs.job_category_id AND job_categories.skill_level = ?) THEN 0 ELSE 1 END',
+                [$profile->skill_classification],
+            )
             ->latest()
             ->paginate($perPage);
 
