@@ -173,7 +173,7 @@ class AdminController extends Controller
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'email' => ['nullable', 'email', 'max:255', 'unique:users,email'],
             'phone' => ['required', 'regex:/^(?:\+256|256|0)?7\d{8}$/', 'unique:users,phone'],
             'role' => ['required', 'in:admin,job_seeker,employer'],
             'admin_role_id' => ['nullable', 'exists:admin_roles,id'],

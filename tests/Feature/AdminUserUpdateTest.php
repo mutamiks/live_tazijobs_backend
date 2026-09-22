@@ -38,6 +38,44 @@ class AdminUserUpdateTest extends TestCase
             ->assertJsonPath('data.employers_pending', 1);
     }
 
+    public function test_admin_can_create_job_seeker_without_email(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
+
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/admin/users', [
+            'name' => 'No Email Worker',
+            'email' => '',
+            'phone' => '0772123456',
+            'role' => 'job_seeker',
+            'status' => 'approved',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+            'profile' => [
+                'full_name' => 'No Email Worker',
+                'job_title' => 'Driver',
+                'gender' => 'male',
+                'district' => 'Kampala',
+                'county' => 'Nakawa',
+                'subcounty' => 'Nakawa',
+                'parish' => 'Nakawa',
+                'village' => 'Kigowa',
+                'education_level' => 'Secondary O Level',
+                'terms_accepted' => true,
+                'is_available' => true,
+            ],
+        ])->assertCreated()
+            ->assertJsonPath('data.name', 'No Email Worker');
+
+        $this->assertDatabaseHas('users', [
+            'name' => 'No Email Worker',
+            'email' => null,
+            'role' => 'job_seeker',
+            'status' => 'approved',
+        ]);
+    }
+
     public function test_admin_can_update_user_account_details(): void
     {
         $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
