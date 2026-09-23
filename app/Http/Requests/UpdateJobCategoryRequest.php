@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class StoreCatalogRequest extends FormRequest
+class UpdateJobCategoryRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -14,7 +14,7 @@ class StoreCatalogRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['sometimes', 'string', 'max:255'],
             'skill_level' => ['sometimes', 'in:skilled,unskilled'],
             'is_active' => ['sometimes', 'boolean'],
         ];

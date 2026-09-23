@@ -6,9 +6,11 @@ use App\Models\EmployerProfile;
 use App\Models\Job;
 use App\Models\JobCategory;
 use App\Models\JobSeekerProfile;
+use App\Jobs\NotifyJobSeekersForApprovedJob;
 use App\Models\User;
 use App\Services\SmsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -165,6 +167,35 @@ class AdminJobSearchTest extends TestCase
         ])->assertCreated()
             ->assertJsonPath('data.allowances.prefer_not_to_say', true)
             ->assertJsonPath('data.status', 'approved');
+    }
+
+    public function test_admin_job_upload_dispatches_background_notification_job(): void
+    {
+        Queue::fake();
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        $employer = User::factory()->create(['role' => 'employer', 'status' => 'approved']);
+        $category = JobCategory::query()->create(['name' => 'Customer support']);
+
+        EmployerProfile::query()->create([
+            'user_id' => $employer->id,
+            'company_name' => 'Bright Works Ltd',
+            'status' => 'approved',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/admin/jobs', [
+            'employer_id' => $employer->id,
+            'job_category_id' => $category->id,
+            'title' => 'Support Agent',
+            'description' => 'Help customers.',
+            'job_type' => 'full_time',
+        ])->assertCreated();
+
+        Queue::assertPushed(NotifyJobSeekersForApprovedJob::class, function ($job) {
+            return $job->jobId !== null;
+        });
     }
 
     public function test_admin_job_upload_notifies_approved_job_seekers_in_selected_category(): void

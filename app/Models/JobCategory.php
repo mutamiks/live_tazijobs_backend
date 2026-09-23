@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class JobCategory extends Model
 {
-    protected $fillable = ['name', 'is_active'];
+    protected $fillable = ['name', 'skill_level', 'is_active'];
 
     protected function casts(): array
     {

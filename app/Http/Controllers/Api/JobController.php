@@ -4,11 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreJobRequest;
+use App\Jobs\NotifyJobSeekersForApprovedJob;
 use App\Models\Job;
 use App\Models\JobSeekerProfile;
 use App\Models\User;
 use App\Services\AdminApprovalNotifier;
-use App\Services\JobSeekerJobNotifier;
 use Illuminate\Http\Request;
 
 class JobController extends Controller
@@ -23,6 +23,15 @@ class JobController extends Controller
         $jobs = Job::query()
             ->with(['category', 'employer.employerProfile'])
             ->publiclyVisible()
+            ->when($request->user()?->role === 'job_seeker', function ($query) use ($request) {
+                $profile = $request->user()->jobSeekerProfile;
+                if ($profile?->status === 'approved') {
+                    $query->orderByRaw(
+                        'CASE WHEN EXISTS (SELECT 1 FROM job_categories WHERE job_categories.id = jobs.job_category_id AND job_categories.skill_level = ?) THEN 0 ELSE 1 END',
+                        [$profile->skill_classification],
+                    );
+                }
+            })
             ->when($request->query('job_category_id'), fn ($query, string $category) => $query->where('job_category_id', $category))
             ->when($request->query('title'), fn ($query, string $title) => $query->where('title', 'like', "%{$title}%"))
             ->when($request->query('search'), function ($query, string $search) {
@@ -83,7 +92,7 @@ class JobController extends Controller
         return response()->json(['message' => 'Job submitted for approval.', 'data' => $job], 201);
     }
 
-    public function adminStore(StoreJobRequest $request, JobSeekerJobNotifier $jobNotifier)
+    public function adminStore(StoreJobRequest $request)
     {
         $data = $request->validated();
         $employer = User::query()->where('role', 'employer')->findOrFail($data['employer_id'] ?? null);
@@ -95,7 +104,8 @@ class JobController extends Controller
             'approved_by' => $request->user()->id,
             'approved_at' => now(),
         ]);
-        $jobNotifier->notifyForApprovedJob($job);
+
+        NotifyJobSeekersForApprovedJob::dispatch($job->id);
 
         return response()->json(['message' => 'Job uploaded and approved by admin.', 'data' => $job->load(['category', 'employer.employerProfile'])], 201);
     }
@@ -136,6 +146,10 @@ class JobController extends Controller
                 $query->whereHas('category', fn ($query) => $query->whereIn('name', $preferredCategories))
                     ->orWhere('district', $profile->district);
             })
+            ->orderByRaw(
+                'CASE WHEN EXISTS (SELECT 1 FROM job_categories WHERE job_categories.id = jobs.job_category_id AND job_categories.skill_level = ?) THEN 0 ELSE 1 END',
+                [$profile->skill_classification],
+            )
             ->latest()
             ->paginate($perPage);
 
