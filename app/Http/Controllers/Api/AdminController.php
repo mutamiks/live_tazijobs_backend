@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ApprovalDecisionRequest;
 use App\Http\Requests\StoreSubscriptionPackageRequest;
+use App\Jobs\NotifyJobSeekersForApprovedJob;
 use App\Models\EmployerProfile;
 use App\Models\AdminRole;
 use App\Models\Job;
@@ -15,7 +16,6 @@ use App\Models\SubscriptionPackage;
 use App\Models\SubscriptionPayment;
 use App\Models\User;
 use App\Models\WorkerOrder;
-use App\Services\JobSeekerJobNotifier;
 use App\Support\NotifiesUsers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -191,10 +191,10 @@ class AdminController extends Controller
             'profile.subcounty' => ['required_if:role,job_seeker,employer', 'nullable', 'string', 'max:255'],
             'profile.parish' => ['required_if:role,job_seeker,employer', 'nullable', 'string', 'max:255'],
             'profile.village' => ['required_if:role,job_seeker,employer', 'nullable', 'string', 'max:255'],
-            'profile.languages' => ['required_if:role,job_seeker', 'nullable', 'array'],
+            'profile.languages' => ['nullable', 'array'],
             'profile.languages.*' => ['string', 'max:100'],
-            'profile.religion' => ['required_if:role,job_seeker', 'nullable', 'string', 'max:100'],
-            'profile.education_level' => ['required_if:role,job_seeker', 'string', Rule::in(self::EDUCATION_LEVELS)],
+            'profile.religion' => ['nullable', 'string', 'max:100'],
+            'profile.education_level' => ['nullable', Rule::in(self::EDUCATION_LEVELS)],
             'profile.skills' => ['nullable', 'array'],
             'profile.skills.*' => ['string', 'max:100'],
             'profile.experience_years' => ['nullable', 'integer', 'min:0', 'max:80'],
@@ -250,7 +250,31 @@ class AdminController extends Controller
             'Your TaziJobs account has been created by an administrator.'
         );
 
+        $this->sendAdminCreatedAccountSms($user);
+
         return response()->json(['message' => 'User account created.', 'data' => $user->load('adminRole')], 201);
+    }
+
+    private function sendAdminCreatedAccountSms(User $user): void
+    {
+        if (! in_array($user->role, ['job_seeker', 'employer'], true) || blank($user->phone)) {
+            return;
+        }
+
+        $sms = match ($user->role) {
+            'job_seeker' => $user->status === 'approved'
+                ? 'TaziJobs: Your worker account has been approved.'
+                : 'TaziJobs: Your worker account was created and is under review.',
+            'employer' => $user->status === 'approved'
+                ? 'TaziJobs: Your employer account has been approved.'
+                : 'TaziJobs: Your employer account was created and is under review.',
+        };
+
+        try {
+            app(SmsService::class)->send($user->phone, Str::limit($sms, 159, ''));
+        } catch (Throwable $exception) {
+            report($exception);
+        }
     }
 
     private function createManagedProfile(User $user, array $profileData, string $status, Request $request): void
@@ -1256,7 +1280,7 @@ class AdminController extends Controller
             $this->saveSubscriptionPackage($owner, (int) $data['subscription_package_id']);
         }
         if ($approved && $model instanceof Job && $fromStatus !== 'approved') {
-            app(JobSeekerJobNotifier::class)->notifyForApprovedJob($model);
+            NotifyJobSeekersForApprovedJob::dispatch($model->id);
         }
         $this->notifyUser(
             $owner,

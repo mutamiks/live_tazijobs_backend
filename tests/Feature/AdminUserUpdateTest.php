@@ -11,6 +11,7 @@ use App\Models\Language;
 use App\Models\Religion;
 use App\Models\SubscriptionPackage;
 use App\Models\User;
+use App\Services\SmsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -74,6 +75,46 @@ class AdminUserUpdateTest extends TestCase
             'role' => 'job_seeker',
             'status' => 'approved',
         ]);
+    }
+
+    public function test_admin_can_create_approved_worker_account_and_send_sms(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
+
+        $sms = $this->mock(SmsService::class);
+        $sms->shouldReceive('normalizePhone')
+            ->once()
+            ->with('0772123456')
+            ->andReturn('256772123456');
+        $sms->shouldReceive('send')
+            ->once()
+            ->with('+256772123456', 'TaziJobs: Your worker account has been approved.')
+            ->andReturn('TEST');
+
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/admin/users', [
+            'name' => 'New Worker',
+            'email' => 'newworker@example.test',
+            'phone' => '0772123456',
+            'role' => 'job_seeker',
+            'status' => 'approved',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+            'profile' => [
+                'full_name' => 'New Worker',
+                'job_title' => 'Driver',
+                'gender' => 'male',
+                'district' => 'Kampala',
+                'county' => 'Nakawa',
+                'subcounty' => 'Nakawa',
+                'parish' => 'Nakawa',
+                'village' => 'Kigowa',
+                'education_level' => 'Secondary O Level',
+                'terms_accepted' => true,
+                'is_available' => true,
+            ],
+        ])->assertCreated();
     }
 
     public function test_admin_can_update_user_account_details(): void
