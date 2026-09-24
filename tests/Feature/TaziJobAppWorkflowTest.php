@@ -4,9 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\EmployerProfile;
 use App\Models\Job;
+use App\Models\JobApplication;
 use App\Models\JobSeekerSubscription;
 use App\Models\JobSeekerProfile;
 use App\Models\JobCategory;
+use App\Models\Notification;
 use App\Models\SubscriptionPackage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -132,6 +134,43 @@ class TaziJobAppWorkflowTest extends TestCase
             'status' => 'shortlisted',
         ])->assertUnprocessable()
             ->assertJsonPath('message', 'Application must be approved by admin first.');
+    }
+
+    public function test_employer_can_mark_application_hired_and_thank_both_parties(): void
+    {
+        $employer = User::factory()->create(['role' => 'employer', 'phone' => '256700000001']);
+        $jobSeeker = User::factory()->create(['role' => 'job_seeker', 'phone' => '256700000002']);
+        $job = Job::query()->create([
+            'employer_id' => $employer->id,
+            'title' => 'Cleaner',
+            'description' => 'Office cleaning.',
+            'job_type' => 'full_time',
+            'status' => 'approved',
+        ]);
+
+        $application = JobApplication::query()->create([
+            'job_id' => $job->id,
+            'job_seeker_id' => $jobSeeker->id,
+            'status' => 'submitted',
+            'approval_status' => 'approved',
+        ]);
+
+        Sanctum::actingAs($employer);
+
+        $this->patchJson("/api/employer/applications/{$application->id}/status", [
+            'status' => 'hired',
+            'employer_notes' => 'Well done. We are excited to work together.',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'hired');
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $jobSeeker->id,
+            'type' => 'job_hired',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $employer->id,
+            'type' => 'thank_you_hire',
+        ]);
     }
 
     public function test_job_seeker_can_search_jobs_without_subscription(): void

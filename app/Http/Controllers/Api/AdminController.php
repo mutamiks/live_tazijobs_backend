@@ -1171,6 +1171,24 @@ class AdminController extends Controller
         }
 
         
+        if ($approved) {
+            $this->notifyUserWithSms(
+                $order->employer,
+                'worker_match_approved',
+                'Worker request approved',
+                "Thank you for choosing {$order->worker->full_name}. Your worker request has been approved and we appreciate your trust in TaziJobs.",
+                "TaziJobs: Thank you for choosing {$order->worker->full_name}. Your worker request has been approved."
+            );
+
+            $this->notifyUserWithSms(
+                $order->worker->user,
+                'worker_match_approved',
+                'You have been matched',
+                "Congratulations! {$order->employer->name} approved your worker request for {$order->job_description} in {$order->job_location}. Thank you for working with TaziJobs.",
+                "TaziJobs: Congratulations! {$order->employer->name} approved your worker request for {$order->job_description}. Thank you for working with TaziJobs."
+            );
+        }
+
         $this->notifyUser(
             $order->worker->user,
             'worker_order',

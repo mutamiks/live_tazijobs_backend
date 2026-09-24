@@ -90,6 +90,22 @@ class JobApplicationController extends Controller
             $application->jobSeeker
                 ->activeJobSeekerSubscription()
                 ->update(['status' => 'completed', 'completed_at' => now()]);
+
+            $this->notifyUserWithSms(
+                $application->jobSeeker,
+                'job_hired',
+                'Job offer confirmed',
+                "Congratulations! You were hired for {$application->job->title}. Thank you for choosing TaziJobs.",
+                "TaziJobs: Congratulations! You were hired for {$application->job->title}. Thank you for choosing TaziJobs."
+            );
+
+            $this->notifyUserWithSms(
+                $application->job->employer,
+                'thank_you_hire',
+                'Thank you for hiring through TaziJobs',
+                "Thank you for hiring {$application->jobSeeker->name} for {$application->job->title}. We appreciate your trust.",
+                "TaziJobs: Thank you for hiring {$application->jobSeeker->name} for {$application->job->title}. We appreciate your trust."
+            );
         }
 
         $this->notifyUser(
