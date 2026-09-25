@@ -201,11 +201,42 @@ class SubscriptionController extends Controller
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
+        $validated = $request->validate([
+            'month' => ['nullable', 'string', 'regex:/^\d{4}-\d{2}$/'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+            'status' => ['nullable', 'string', 'max:50'],
+            'search' => ['nullable', 'string', 'max:100'],
+            'payment_method' => ['nullable', 'string', 'max:50'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
         $perPage = (int) $request->integer('per_page', 50);
         $perPage = max(1, min($perPage, 100));
 
         $payments = SubscriptionPayment::query()
             ->with(['package', 'user'])
+            ->when($request->query('status'), fn ($query, string $status) => $query->where('status', $status))
+            ->when($request->query('payment_method'), fn ($query, string $method) => $query->where('payment_method', $method))
+            ->when($request->query('month'), function ($query, string $month) {
+                $date = \DateTime::createFromFormat('Y-m', $month);
+                if ($date) {
+                    $query->whereMonth('created_at', (int) $date->format('n'))
+                        ->whereYear('created_at', (int) $date->format('Y'));
+                }
+            })
+            ->when($request->date('from'), fn ($query, $date) => $query->whereDate('created_at', '>=', $date))
+            ->when($request->date('to'), fn ($query, $date) => $query->whereDate('created_at', '<=', $date))
+            ->when($request->query('search'), function ($query, string $search) {
+                $query->where(function ($query) use ($search) {
+                    $query->where('transaction_reference', 'like', "%{$search}%")
+                        ->orWhere('invoice_number', 'like', "%{$search}%")
+                        ->orWhere('reference_number', 'like', "%{$search}%")
+                        ->orWhere('payment_reason', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%")
+                        ->orWhereHas('user', fn ($query) => $query->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%"));
+                });
+            })
             ->latest()
             ->paginate($perPage);
 
