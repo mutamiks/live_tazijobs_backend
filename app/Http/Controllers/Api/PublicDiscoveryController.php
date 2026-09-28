@@ -29,10 +29,10 @@ class PublicDiscoveryController extends Controller
             'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
         $search = trim($data['search'] ?? '');
-        $limit = (int) ($data['limit'] ?? 6);
+        $limit = (int) ($data['limit'] ?? 12);
 
         $payload = [
-            'jobs' => $this->jobs($search, $limit, $data),
+            'jobs' => $this->jobs($search, $data),
             'job_seekers' => $this->jobSeekers($search, $limit, $data),
         ];
 
@@ -126,7 +126,7 @@ class PublicDiscoveryController extends Controller
         return response()->json(['message' => 'Booking request submitted. TaziJobs will contact you.', 'data' => $order], 201);
     }
 
-    private function jobs(string $search, int $limit, array $filters = [])
+    private function jobs(string $search, array $filters = [])
     {
         return Job::query()
             ->select([
@@ -166,7 +166,6 @@ class PublicDiscoveryController extends Controller
                 });
             })
             ->latest()
-            ->limit($limit)
             ->get();
     }
 
