@@ -14,6 +14,8 @@ use App\Http\Controllers\Api\SmsManagementController;
 use App\Http\Controllers\Api\WorkerController;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\EmployerController;
+
 
 Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
@@ -171,6 +173,8 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('employer-profiles/pending', [AdminController::class, 'pendingEmployers']);
             Route::get('employer-profiles/{profile}', [AdminController::class, 'showEmployer']);
             Route::patch('employer-profiles/{profile}/decision', [AdminController::class, 'decideEmployer']);
+            Route::get('employers-directory', [EmployerController::class, 'directory']);
+            Route::post('employers-directory/message', [EmployerController::class, 'sendGroupMessage']);
         });
 
         Route::get('jobs/pending', [AdminController::class, 'pendingJobs'])->middleware('permission:approve_jobs,view_pending_jobs');
@@ -196,3 +200,5 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('subscription-packages/{package}', [AdminController::class, 'updateSubscriptionPackage'])->middleware('permission:manage_subscription_packages,edit_subscription_packages');
     });
 });
+Route::get('/employers', [EmployerController::class, 'index']);
+Route::post('/employers', [EmployerController::class, 'store']);
