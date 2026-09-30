@@ -39,6 +39,19 @@ class AdminUserUpdateTest extends TestCase
             ->assertJsonPath('data.employers_pending', 1);
     }
 
+    public function test_admin_user_list_is_capped_at_fifteen_rows(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
+        User::factory()->count(16)->create(['role' => 'job_seeker', 'status' => 'approved']);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/admin/users?per_page=100')
+            ->assertOk()
+            ->assertJsonCount(15, 'data.data')
+            ->assertJsonPath('data.per_page', 15);
+    }
+
     public function test_admin_can_create_job_seeker_without_email(): void
     {
         $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);

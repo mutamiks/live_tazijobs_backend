@@ -50,6 +50,25 @@ class PublicDiscoveryTest extends TestCase
         $this->assertStringNotContainsString('Private job description', $body);
     }
 
+    public function test_guest_can_view_public_job_details_without_an_account(): void
+    {
+        $employer = User::factory()->create(['role' => 'employer', 'status' => 'approved']);
+        $job = Job::query()->create([
+            'employer_id' => $employer->id,
+            'title' => 'Warehouse Assistant',
+            'description' => 'Manage stock and prepare orders.',
+            'job_type' => 'full_time',
+            'deadline' => now()->addWeek(),
+            'status' => 'approved',
+        ]);
+
+        $this->getJson('/api/public/jobs/'.$job->id)
+            ->assertOk()
+            ->assertJsonPath('data.id', $job->id)
+            ->assertJsonPath('data.title', 'Warehouse Assistant')
+            ->assertJsonPath('data.description', 'Manage stock and prepare orders.');
+    }
+
     public function test_public_discovery_hides_jobs_from_suspended_employers(): void
     {
         $activeEmployer = User::factory()->create(['role' => 'employer', 'status' => 'approved']);

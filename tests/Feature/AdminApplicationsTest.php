@@ -43,4 +43,36 @@ class AdminApplicationsTest extends TestCase
             ->assertJsonPath('data.data.0.job_seeker.name', $jobSeeker->name)
             ->assertJsonPath('data.total', 1);
     }
+
+    public function test_admin_application_list_is_capped_at_fifteen_rows(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $employer = User::factory()->create(['role' => 'employer']);
+        $job = Job::query()->create([
+            'employer_id' => $employer->id,
+            'title' => 'Accounts Assistant',
+            'description' => 'Support finance operations.',
+            'job_type' => 'full_time',
+            'status' => 'approved',
+        ]);
+
+        foreach (range(1, 16) as $index) {
+            $jobSeeker = User::factory()->create(['role' => 'job_seeker']);
+            JobApplication::query()->create([
+                'job_id' => $job->id,
+                'job_seeker_id' => $jobSeeker->id,
+                'cover_letter' => "Application {$index}",
+                'status' => 'submitted',
+                'approval_status' => 'pending',
+            ]);
+        }
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/admin/applications?per_page=100')
+            ->assertOk()
+            ->assertJsonCount(15, 'data.data')
+            ->assertJsonPath('data.per_page', 15)
+            ->assertJsonPath('data.total', 16);
+    }
 }
