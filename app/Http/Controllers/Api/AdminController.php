@@ -78,7 +78,7 @@ class AdminController extends Controller
             ->when(! $request->filled('search') && ! $request->filled('status'), fn ($query) => $query->where('status', 'approved'))
             ->orderByRaw("CASE WHEN status = 'approved' THEN 1 WHEN status = 'pending' THEN 2 WHEN status = 'rejected' THEN 3 WHEN status = 'suspended' THEN 4 ELSE 5 END")
             ->latest()
-            ->paginate(20);
+            ->paginate(max(1, min($request->integer('per_page', 15), 15)));
 
         return response()->json(['data' => $users]);
     }
@@ -1056,8 +1056,7 @@ class AdminController extends Controller
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $perPage = (int) $request->integer('per_page', 25);
-        $perPage = max(1, min($perPage, 100));
+        $perPage = max(1, min($request->integer('per_page', 15), 15));
 
         $query = JobApplication::query()
             ->with(['job.employer.employerProfile', 'jobSeeker.jobSeekerProfile', 'approver:id,name'])
