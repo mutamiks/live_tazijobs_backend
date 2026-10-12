@@ -160,13 +160,64 @@ class AdminJobSearchTest extends TestCase
             'title' => 'Support Agent',
             'description' => 'Help customers.',
             'job_type' => 'full_time',
+            'field_officer_name' => 'Grace Field',
             'allowances' => [
                 'prefer_not_to_say' => true,
                 'items' => [],
             ],
         ])->assertCreated()
             ->assertJsonPath('data.allowances.prefer_not_to_say', true)
+            ->assertJsonPath('data.field_officer_name', 'Grace Field')
             ->assertJsonPath('data.status', 'approved');
+    }
+
+    public function test_field_officer_name_is_only_returned_to_admins(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $employer = User::factory()->create(['role' => 'employer', 'status' => 'approved']);
+        $jobSeeker = User::factory()->create(['role' => 'job_seeker', 'status' => 'approved']);
+        $category = JobCategory::query()->create(['name' => 'Customer support']);
+        EmployerProfile::query()->create([
+            'user_id' => $employer->id,
+            'company_name' => 'Bright Works Ltd',
+            'status' => 'approved',
+        ]);
+        $job = Job::query()->create([
+            'employer_id' => $employer->id,
+            'title' => 'Support Agent',
+            'description' => 'Help customers.',
+            'job_type' => 'full_time',
+            'status' => 'approved',
+            'field_officer_name' => 'Grace Field',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson("/api/admin/jobs/{$job->id}")
+            ->assertOk()
+            ->assertJsonPath('data.field_officer_name', 'Grace Field');
+
+        Sanctum::actingAs($employer);
+
+        $this->postJson('/api/employer/jobs', [
+            'job_category_id' => $category->id,
+            'title' => 'New job',
+            'description' => 'A job submitted by an employer.',
+            'job_type' => 'full_time',
+            'field_officer_name' => 'Someone Else',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('field_officer_name');
+
+        $this->getJson('/api/employer/jobs')
+            ->assertOk()
+            ->assertJsonMissingPath('data.data.0.field_officer_name');
+
+        Sanctum::actingAs($jobSeeker);
+
+        $this->getJson('/api/jobs')
+            ->assertOk()
+            ->assertJsonMissingPath('data.data.0.field_officer_name');
     }
 
     public function test_admin_job_upload_dispatches_background_notification_job(): void
@@ -352,12 +403,14 @@ class AdminJobSearchTest extends TestCase
                     ['type' => 'transport', 'amount' => 50000],
                 ],
             ],
+            'field_officer_name' => 'Grace Field',
             'deadline' => now()->addWeek()->toDateString(),
         ])
             ->assertOk()
             ->assertJsonPath('data.title', 'Senior Cleaner')
             ->assertJsonPath('data.category.name', 'Customer support')
             ->assertJsonPath('data.positions', 3)
+            ->assertJsonPath('data.field_officer_name', 'Grace Field')
             ->assertJsonPath('data.allowances.items.0.type', 'transport');
     }
 }
