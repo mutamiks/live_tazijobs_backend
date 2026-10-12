@@ -30,6 +30,7 @@ class Job extends Model
         'allowances',
         'deadline',
         'contact_phone',
+        'field_officer_name',
         'status',
         'rejection_reason',
         'approved_by',

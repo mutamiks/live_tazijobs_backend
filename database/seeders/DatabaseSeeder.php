@@ -115,16 +115,16 @@ class DatabaseSeeder extends Seeder
 
         $employers = [
             [
-                'user' => ['name' => 'Bright Works HR', 'email' => 'hr@brightworks.test', 'phone' => '+256704444444', 'status' => 'approved'],
-                'profile' => ['company_name' => 'Bright Works Ltd', 'company_email' => 'hr@brightworks.test', 'company_phone' => '+256704444444', 'company_location' => 'Kampala, Central', 'district' => 'Kampala', 'subcounty' => 'Central', 'company_registration_number' => 'BW-2026-001', 'company_description' => 'Technology and business process outsourcing company.', 'preferred_worker_type' => 'Technology workers', 'website' => 'https://brightworks.test', 'status' => 'approved'],
+                'user' => ['name' => 'Bright Works HR', 'email' => 'hr@brightworks.test', 'phone' => null, 'status' => 'approved'],
+                'profile' => ['company_name' => 'Bright Works Ltd', 'company_email' => 'hr@brightworks.test', 'company_phone' => null, 'company_location' => 'Kampala, Central', 'district' => 'Kampala', 'subcounty' => 'Central', 'company_registration_number' => 'BW-2026-001', 'company_description' => 'Technology and business process outsourcing company.', 'preferred_worker_type' => 'Technology workers', 'website' => 'https://brightworks.test', 'status' => 'approved'],
             ],
             [
-                'user' => ['name' => 'Nile Foods HR', 'email' => 'jobs@nilefoods.test', 'phone' => '+256705555555', 'status' => 'pending'],
-                'profile' => ['company_name' => 'Nile Foods', 'company_email' => 'jobs@nilefoods.test', 'company_phone' => '+256705555555', 'company_location' => 'Jinja, Walukuba', 'district' => 'Jinja', 'subcounty' => 'Walukuba', 'company_registration_number' => 'NF-7788', 'company_description' => 'Food production and logistics employer.', 'preferred_worker_type' => 'Factory workers', 'status' => 'pending'],
+                'user' => ['name' => 'Nile Foods HR', 'email' => 'jobs@nilefoods.test', 'phone' => null, 'status' => 'pending'],
+                'profile' => ['company_name' => 'Nile Foods', 'company_email' => 'jobs@nilefoods.test', 'company_phone' => null, 'company_location' => 'Jinja, Walukuba', 'district' => 'Jinja', 'subcounty' => 'Walukuba', 'company_registration_number' => 'NF-7788', 'company_description' => 'Food production and logistics employer.', 'preferred_worker_type' => 'Factory workers', 'status' => 'pending'],
             ],
             [
-                'user' => ['name' => 'Quick Hire HR', 'email' => 'team@quickhire.test', 'phone' => '+256706666666', 'status' => 'rejected'],
-                'profile' => ['company_name' => 'Quick Hire Agency', 'company_email' => 'team@quickhire.test', 'company_phone' => '+256706666666', 'company_location' => 'Mukono, Goma', 'district' => 'Mukono', 'subcounty' => 'Goma', 'company_registration_number' => 'QH-1100', 'company_description' => 'Recruitment agency profile awaiting correction.', 'preferred_worker_type' => 'Domestic workers', 'status' => 'rejected', 'rejection_reason' => 'Company registration number could not be verified.'],
+                'user' => ['name' => 'Quick Hire HR', 'email' => 'team@quickhire.test', 'phone' => null, 'status' => 'rejected'],
+                'profile' => ['company_name' => 'Quick Hire Agency', 'company_email' => 'team@quickhire.test', 'company_phone' => null, 'company_location' => 'Mukono, Goma', 'district' => 'Mukono', 'subcounty' => 'Goma', 'company_registration_number' => 'QH-1100', 'company_description' => 'Recruitment agency profile awaiting correction.', 'preferred_worker_type' => 'Domestic workers', 'status' => 'rejected', 'rejection_reason' => 'Company registration number could not be verified.'],
             ],
         ];
 

@@ -79,7 +79,7 @@ class JobController extends Controller
             return response()->json(['message' => 'Employer profile must be approved before posting jobs.'], 422);
         }
 
-        $data = collect($request->validated())->except('employer_id')->all();
+        $data = collect($request->validated())->except(['employer_id', 'field_officer_name'])->all();
         $data['location'] = $data['location'] ?? $this->formatLocation($data);
 
         $job = $request->user()->jobPosts()->create($data + ['status' => 'pending']);
@@ -89,7 +89,7 @@ class JobController extends Controller
             "A new job titled {$job->title} is awaiting administrative approval."
         );
 
-        return response()->json(['message' => 'Job submitted for approval.', 'data' => $job], 201);
+        return response()->json(['message' => 'Job submitted for approval.', 'data' => $this->publicJobPayload($job, $request)], 201);
     }
 
     public function adminStore(StoreJobRequest $request)
@@ -174,6 +174,8 @@ class JobController extends Controller
             ->latest()
             ->paginate(15);
 
+        $jobs->getCollection()->transform(fn (Job $job) => $this->publicJobPayload($job, $request));
+
         return response()->json(['data' => $jobs]);
     }
 
@@ -187,7 +189,7 @@ class JobController extends Controller
             return response()->json(['message' => 'Employer profile must be approved before editing jobs.'], 422);
         }
 
-        $data = collect($request->validated())->except('employer_id')->all();
+        $data = collect($request->validated())->except(['employer_id', 'field_officer_name'])->all();
         $data['location'] = $data['location'] ?? $this->formatLocation($data);
 
         $job->update($data + [
@@ -199,7 +201,7 @@ class JobController extends Controller
 
         return response()->json([
             'message' => 'Job changes submitted for approval.',
-            'data' => $job->fresh(),
+            'data' => $this->publicJobPayload($job->fresh(), $request),
         ]);
     }
 
@@ -227,22 +229,26 @@ class JobController extends Controller
 
 
     private function publicJobPayload(Job $job, Request $request): array
-{
-    $payload = $job->toArray();
+    {
+        $payload = $job->toArray();
 
-    // Check if the logged-in user is an admin or employer
-    $showPhone = $request->user() && $request->user()->canSeeContactDetails();
+        // Check if the logged-in user is an admin or employer
+        $showPhone = $request->user() && $request->user()->canSeeContactDetails();
 
-    if (!$showPhone) {
-        unset($payload['contact_phone']); // Hide job phone
-        
-        // Hide company profile phone if nested in the response
+        if (! $showPhone) {
+            unset($payload['contact_phone']); // Hide job phone
+
+            // Hide company profile phone if nested in the response
             if (isset($payload['employer']['employer_profile'])) {
                 unset(
                     $payload['employer']['employer_profile']['company_phone'],
                     $payload['employer']['employer_profile']['subcounty']
                 );
             }
+        }
+
+        if (! $request->user()?->isAdmin()) {
+            unset($payload['field_officer_name']);
         }
 
         return $payload;

@@ -45,6 +45,9 @@ class StoreJobRequest extends FormRequest
             'allowances.items.*.amount' => ['nullable', 'numeric', 'min:0'],
             'deadline' => ['nullable', 'date', 'after_or_equal:today'],
             'contact_phone' => ['nullable', 'string', 'max:20'],
+            'field_officer_name' => $this->user()?->isAdmin()
+                ? ['nullable', 'string', 'max:255']
+                : ['prohibited'],
            
         ];
     }
