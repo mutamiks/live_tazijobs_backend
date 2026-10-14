@@ -58,7 +58,7 @@ class PublicDiscoveryTest extends TestCase
             'title' => 'Warehouse Assistant',
             'description' => 'Manage stock and prepare orders.',
             'job_type' => 'full_time',
-            'deadline' => now()->addWeek(),
+            'deadline' => now()->subDay(),
             'status' => 'approved',
         ]);
 
@@ -67,6 +67,25 @@ class PublicDiscoveryTest extends TestCase
             ->assertJsonPath('data.id', $job->id)
             ->assertJsonPath('data.title', 'Warehouse Assistant')
             ->assertJsonPath('data.description', 'Manage stock and prepare orders.');
+    }
+
+    public function test_public_discovery_includes_jobs_with_past_deadlines(): void
+    {
+        $employer = User::factory()->create(['role' => 'employer', 'status' => 'approved']);
+
+        Job::query()->create([
+            'employer_id' => $employer->id,
+            'title' => 'Expired Deadline Carpenter',
+            'description' => 'Still publicly listed.',
+            'job_type' => 'contract',
+            'deadline' => now()->subDay(),
+            'status' => 'approved',
+        ]);
+
+        $this->getJson('/api/public/discovery?search=Expired%20Deadline')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.jobs')
+            ->assertJsonPath('data.jobs.0.title', 'Expired Deadline Carpenter');
     }
 
     public function test_public_discovery_hides_jobs_from_suspended_employers(): void

@@ -87,7 +87,6 @@ class PublicDiscoveryController extends Controller
             ->with('category:id,name')
             ->publiclyVisible()
             ->whereKey($job)
-            ->where(fn ($query) => $query->whereNull('deadline')->orWhereDate('deadline', '>=', today()))
             ->firstOrFail();
 
         return response()->json(['data' => $job->only([
@@ -135,7 +134,6 @@ class PublicDiscoveryController extends Controller
             ])
             ->with('category:id,name')
             ->publiclyVisible()
-            ->where(fn ($query) => $query->whereNull('deadline')->orWhereDate('deadline', '>=', today()))
             ->when($filters['title'] ?? null, fn ($query, string $title) => $query->where('title', 'like', "%{$title}%"))
             ->when($filters['job_category_id'] ?? null, fn ($query, string|int $category) => $query->where('job_category_id', $category))
             ->when($filters['district'] ?? null, function ($query, string $district) {
