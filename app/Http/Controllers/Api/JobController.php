@@ -27,7 +27,7 @@ class JobController extends Controller
                 $profile = $request->user()->jobSeekerProfile;
                 if ($profile?->status === 'approved') {
                     $query->orderByRaw(
-                        'CASE WHEN EXISTS (SELECT 1 FROM job_categories WHERE job_categories.id = jobs.job_category_id AND job_categories.skill_level = ?) THEN 0 ELSE 1 END',
+                        'CASE WHEN jobs.skill_classification = ? THEN 0 ELSE 1 END',
                         [$profile->skill_classification],
                     );
                 }
@@ -147,7 +147,7 @@ class JobController extends Controller
                     ->orWhere('district', $profile->district);
             })
             ->orderByRaw(
-                'CASE WHEN EXISTS (SELECT 1 FROM job_categories WHERE job_categories.id = jobs.job_category_id AND job_categories.skill_level = ?) THEN 0 ELSE 1 END',
+                'CASE WHEN jobs.skill_classification = ? THEN 0 ELSE 1 END',
                 [$profile->skill_classification],
             )
             ->latest()

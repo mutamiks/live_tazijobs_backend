@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Job;
+use App\Models\JobSeekerProfile;
 use App\Models\JobSeekerSubscription;
 use App\Models\SubscriptionPackage;
 use App\Models\User;
@@ -89,6 +90,60 @@ class JobSearchFilterTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data.data')
             ->assertJsonPath('data.data.0.title', 'Laravel Developer');
+    }
+
+    public function test_job_feed_prioritizes_jobs_matching_the_approved_job_seekers_skill_classification(): void
+    {
+        $employer = User::factory()->create(['role' => 'employer', 'status' => 'approved']);
+        $skilledSeeker = User::factory()->create(['role' => 'job_seeker']);
+        $unskilledSeeker = User::factory()->create(['role' => 'job_seeker']);
+
+        JobSeekerProfile::query()->create([
+            'user_id' => $skilledSeeker->id,
+            'full_name' => 'Skilled Seeker',
+            'education_level' => 'university',
+            'status' => 'approved',
+        ]);
+        JobSeekerProfile::query()->create([
+            'user_id' => $unskilledSeeker->id,
+            'full_name' => 'Unskilled Seeker',
+            'education_level' => 'primary',
+            'status' => 'approved',
+        ]);
+
+        $unskilledJob = Job::query()->create([
+            'employer_id' => $employer->id,
+            'title' => 'Unskilled role',
+            'description' => 'General work.',
+            'job_type' => 'full_time',
+            'skill_classification' => 'unskilled',
+            'status' => 'approved',
+        ]);
+        $skilledJob = Job::query()->create([
+            'employer_id' => $employer->id,
+            'title' => 'Skilled role',
+            'description' => 'Specialized work.',
+            'job_type' => 'full_time',
+            'skill_classification' => 'skilled',
+            'status' => 'approved',
+        ]);
+
+        Sanctum::actingAs($skilledSeeker);
+        $this->getJson('/api/jobs')
+            ->assertOk()
+            ->assertJsonPath('data.data.0.id', $skilledJob->id)
+            ->assertJsonPath('data.data.0.skill_classification', 'skilled');
+        $this->getJson('/api/jobs/matching')
+            ->assertOk()
+            ->assertJsonPath('data.data.0.id', $skilledJob->id);
+
+        Sanctum::actingAs($unskilledSeeker);
+        $this->getJson('/api/jobs')
+            ->assertOk()
+            ->assertJsonPath('data.data.0.id', $unskilledJob->id);
+        $this->getJson('/api/jobs/matching')
+            ->assertOk()
+            ->assertJsonPath('data.data.0.id', $unskilledJob->id);
     }
 
     public function test_job_seekers_do_not_see_jobs_from_suspended_employers(): void
