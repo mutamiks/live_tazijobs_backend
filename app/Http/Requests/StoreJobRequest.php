@@ -24,6 +24,7 @@ class StoreJobRequest extends FormRequest
         return [
             'employer_id' => ['sometimes', 'integer', 'exists:users,id'],
             'job_category_id' => ['required', 'integer', 'exists:job_categories,id'],
+            'skill_classification' => ['sometimes', Rule::in(['skilled', 'unskilled'])],
             'title' => ['required', 'string', 'max:255'],
             'positions' => ['sometimes', 'integer', 'min:1', 'max:1000'],
             'description' => ['required', 'string'],
