@@ -81,6 +81,10 @@ class JobController extends Controller
 
         $data = collect($request->validated())->except(['employer_id', 'field_officer_name'])->all();
         $data['location'] = $data['location'] ?? $this->formatLocation($data);
+        $data['skill_classification'] = Job::classificationForSalary(
+            $data['salary_min'] ?? null,
+            $data['salary_max'] ?? null,
+        );
 
         $job = $request->user()->jobPosts()->create($data + ['status' => 'pending']);
 
@@ -97,6 +101,10 @@ class JobController extends Controller
         $data = $request->validated();
         $employer = User::query()->where('role', 'employer')->findOrFail($data['employer_id'] ?? null);
         $data['location'] = $data['location'] ?? $this->formatLocation($data);
+        $data['skill_classification'] = Job::classificationForSalary(
+            $data['salary_min'] ?? null,
+            $data['salary_max'] ?? null,
+        );
 
         $job = Job::query()->create($data + [
             'employer_id' => $employer->id,
@@ -119,6 +127,10 @@ class JobController extends Controller
         }
 
         $data['location'] = $data['location'] ?? $this->formatLocation($data);
+        $data['skill_classification'] = Job::classificationForSalary(
+            array_key_exists('salary_min', $data) ? $data['salary_min'] : $job->salary_min,
+            array_key_exists('salary_max', $data) ? $data['salary_max'] : $job->salary_max,
+        );
         $job->update($data);
 
         return response()->json([
@@ -191,6 +203,10 @@ class JobController extends Controller
 
         $data = collect($request->validated())->except(['employer_id', 'field_officer_name'])->all();
         $data['location'] = $data['location'] ?? $this->formatLocation($data);
+        $data['skill_classification'] = Job::classificationForSalary(
+            array_key_exists('salary_min', $data) ? $data['salary_min'] : $job->salary_min,
+            array_key_exists('salary_max', $data) ? $data['salary_max'] : $job->salary_max,
+        );
 
         $job->update($data + [
             'status' => 'pending',
