@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Job extends Model
 {
+    public const SKILLED_SALARY_THRESHOLD = 350000;
+
     protected $fillable = [
         'employer_id',
         'job_category_id',
@@ -49,6 +51,15 @@ class Job extends Model
             'approved_at' => 'datetime',
             'is_listed' => 'boolean',
         ];
+    }
+
+    public static function classificationForSalary(int|float|string|null $salaryMin, int|float|string|null $salaryMax): string
+    {
+        $salary = $salaryMax ?? $salaryMin;
+
+        return is_numeric($salary) && (float) $salary > self::SKILLED_SALARY_THRESHOLD
+            ? 'skilled'
+            : 'unskilled';
     }
 
     public function employer(): BelongsTo
