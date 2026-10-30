@@ -14,6 +14,21 @@ class EmployerDirectoryMessageTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_employer_can_be_created_without_an_email(): void
+    {
+        $this->postJson('/api/employers', [
+            'company_name' => 'No Email Logistics',
+            'category' => 'Logistics',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('employer.email', null);
+
+        $this->assertDatabaseHas('employers', [
+            'company_name' => 'No Email Logistics',
+            'email' => null,
+        ]);
+    }
+
     public function test_admin_can_list_employer_directory_with_working_group_derived_from_approved_users(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);

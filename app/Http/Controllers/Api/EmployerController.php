@@ -30,7 +30,7 @@ class EmployerController extends Controller
         $validator = Validator::make($request->all(), [
             'company_name' => ['required', 'string', 'max:255'],
             'contact_person' => ['nullable', 'string', 'max:255'],
-            'email' => ['required', 'email', 'unique:employers,email'],
+            'email' => ['nullable', 'email', 'unique:employers,email'],
             'phone' => ['nullable', 'string', 'max:30'],
             'category' => ['required', 'string', 'max:255'],
             'status' => ['nullable', 'in:potential,pending,working,active,approved,inactive'],
