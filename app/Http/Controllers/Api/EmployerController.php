@@ -111,26 +111,33 @@ class EmployerController extends Controller
     public function sendGroupMessage(Request $request)
     {
         $data = $request->validate([
-            'status' => ['required', 'in:potential,pending,working'],
+            'recipient_ids' => ['required', 'array', 'min:1'],
+            'recipient_ids.*' => ['required', 'string', 'distinct'],
             'channel' => ['required', 'in:email,sms'],
             'subject' => ['nullable', 'string', 'max:255'],
             'message' => ['required', 'string', 'max:2000'],
         ]);
 
         $directory = $this->directory()->getData(true)['data']['items'] ?? [];
-        $matches = collect($directory)->filter(fn ($employer) => $this->normalizeStatus($employer['status']) === $data['status'])->values();
+        $recipientIds = collect($data['recipient_ids']);
+        $matches = collect($directory)
+            ->filter(fn ($employer) => $recipientIds->contains((string) $employer['id']))
+            ->values();
+
+        if ($matches->count() !== $recipientIds->count()) {
+            return response()->json(['message' => 'One or more selected employers are no longer in the directory.'], 422);
+        }
 
         if ($data['channel'] === 'email') {
-            $emails = $matches->pluck('email')->filter()->unique()->values()->all();
+            $emails = $matches->pluck('email')->map(fn ($email) => trim((string) $email))->unique()->values();
+            if ($emails->contains(fn ($email) => ! filter_var($email, FILTER_VALIDATE_EMAIL))) {
+                return response()->json(['message' => 'Every selected employer must have a valid email address before sending.'], 422);
+            }
+
             $sent = 0;
             $failed = [];
 
             foreach ($emails as $email) {
-                if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    $failed[] = $email;
-                    continue;
-                }
-
                 $result = $this->emailService->send(
                     $email,
                     $data['subject'] ?? 'Thank you for partnering with us',
@@ -146,12 +153,17 @@ class EmployerController extends Controller
             }
 
             return response()->json([
-                'message' => 'Bulk email message processed.',
-                'data' => ['sent' => $sent, 'failed' => $failed, 'channel' => 'email', 'status' => $data['status']],
+                'message' => 'Email message processed for selected employers.',
+                'data' => ['sent' => $sent, 'failed' => $failed, 'channel' => 'email'],
             ]);
         }
 
-        $phones = $matches->pluck('phone')->filter()->map(fn ($value) => preg_replace('/\D+/', '', (string) $value))->filter(fn ($value) => strlen($value) >= 9)->unique()->values()->all();
+        $phones = $matches->pluck('phone')->map(fn ($phone) => $this->smsService->normalizePhone((string) $phone));
+        if ($phones->contains(fn ($phone) => strlen($phone) < 9)) {
+            return response()->json(['message' => 'Every selected employer must have a valid phone number before sending.'], 422);
+        }
+
+        $phones = $phones->unique()->values();
         $sent = 0;
         $failed = [];
 
@@ -165,8 +177,8 @@ class EmployerController extends Controller
         }
 
         return response()->json([
-            'message' => 'Bulk SMS message processed.',
-            'data' => ['sent' => $sent, 'failed' => $failed, 'channel' => 'sms', 'status' => $data['status']],
+            'message' => 'SMS message processed for selected employers.',
+            'data' => ['sent' => $sent, 'failed' => $failed, 'channel' => 'sms'],
         ]);
     }
 

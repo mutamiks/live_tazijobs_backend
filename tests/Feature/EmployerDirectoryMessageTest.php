@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Employer;
 use App\Models\EmployerProfile;
 use App\Models\User;
+use App\Services\SmsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Laravel\Sanctum\Sanctum;
@@ -99,7 +100,7 @@ class EmployerDirectoryMessageTest extends TestCase
         Sanctum::actingAs($admin);
 
         $this->postJson('/api/admin/employers-directory/message', [
-            'status' => 'working',
+            'recipient_ids' => ['user-'.$approvedUser->id],
             'channel' => 'email',
             'subject' => 'Thank you for partnering with us',
             'message' => 'Thank you for always choosing to partner with us.',
@@ -110,5 +111,56 @@ class EmployerDirectoryMessageTest extends TestCase
         Mail::assertSent(\App\Mail\GenericMail::class, function ($mail) {
             return str_contains($mail->subject, 'Thank you for partnering with us');
         });
+    }
+
+    public function test_admin_can_send_a_custom_sms_only_to_selected_employers(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $selected = Employer::query()->create([
+            'company_name' => 'Potential Logistics',
+            'phone' => '+256700000001',
+            'category' => 'Logistics',
+            'status' => 'potential',
+        ]);
+        Employer::query()->create([
+            'company_name' => 'Other Potential Logistics',
+            'phone' => '+256700000002',
+            'category' => 'Logistics',
+            'status' => 'potential',
+        ]);
+        Sanctum::actingAs($admin);
+
+        $this->mock(SmsService::class, function ($mock) {
+            $mock->shouldReceive('normalizePhone')
+                ->once()
+                ->with('+256700000001')
+                ->andReturn('256700000001');
+            $mock->shouldReceive('send')
+                ->once()
+                ->with('256700000001', 'A custom message for potential employers.')
+                ->andReturn('OK');
+        });
+
+        $this->postJson('/api/admin/employers-directory/message', [
+            'recipient_ids' => [(string) $selected->id],
+            'channel' => 'sms',
+            'message' => 'A custom message for potential employers.',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.sent', 1)
+            ->assertJsonPath('data.failed', []);
+    }
+
+    public function test_admin_cannot_send_a_directory_message_without_selecting_recipients(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/admin/employers-directory/message', [
+            'channel' => 'sms',
+            'message' => 'A custom message.',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('recipient_ids');
     }
 }
